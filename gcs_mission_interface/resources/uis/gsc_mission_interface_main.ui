@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>993</width>
+    <width>1261</width>
     <height>738</height>
    </rect>
   </property>
@@ -24,7 +24,7 @@
     <item row="0" column="0">
      <widget class="QTabWidget" name="tabWidget_2">
       <property name="currentIndex">
-       <number>2</number>
+       <number>1</number>
       </property>
       <property name="movable">
        <bool>false</bool>
@@ -38,8 +38,8 @@
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_6">
         <item>
-         <widget class="QWebEngineView" name="webEngineView">
-          <property name="url">
+         <widget class="QWebEngineView" name="webEngineView" native="true">
+          <property name="url" stdset="0">
            <url>
             <string>about:blank</string>
            </url>
@@ -125,35 +125,23 @@
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_7">
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_5">
-          <item>
-           <spacer name="horizontalSpacer_4">
-            <property name="orientation">
-             <enum>Qt::Horizontal</enum>
-            </property>
-            <property name="sizeHint" stdset="0">
-             <size>
-              <width>40</width>
-              <height>20</height>
-             </size>
-            </property>
-           </spacer>
-          </item>
-          <item>
-           <widget class="QPushButton" name="pushButton_2">
-            <property name="text">
-             <string>PushButton</string>
-            </property>
-           </widget>
-          </item>
-          <item>
-           <widget class="QPushButton" name="pushButton">
-            <property name="text">
-             <string>PushButton</string>
-            </property>
-           </widget>
-          </item>
-         </layout>
+         <widget class="QTableWidget" name="tableWidget_fleet_overview">
+          <property name="editTriggers">
+           <set>QAbstractItemView::NoEditTriggers</set>
+          </property>
+          <property name="defaultDropAction">
+           <enum>Qt::TargetMoveAction</enum>
+          </property>
+          <property name="selectionMode">
+           <enum>QAbstractItemView::SingleSelection</enum>
+          </property>
+          <property name="selectionBehavior">
+           <enum>QAbstractItemView::SelectRows</enum>
+          </property>
+          <property name="sortingEnabled">
+           <bool>false</bool>
+          </property>
+         </widget>
         </item>
        </layout>
       </widget>
@@ -164,11 +152,20 @@
        <layout class="QVBoxLayout" name="verticalLayout">
         <item>
          <widget class="QTableWidget" name="tableWidget_task_log_overview">
+          <property name="editTriggers">
+           <set>QAbstractItemView::NoEditTriggers</set>
+          </property>
+          <property name="selectionMode">
+           <enum>QAbstractItemView::SingleSelection</enum>
+          </property>
+          <property name="selectionBehavior">
+           <enum>QAbstractItemView::SelectRows</enum>
+          </property>
           <property name="sortingEnabled">
-           <bool>true</bool>
+           <bool>false</bool>
           </property>
           <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
-           <bool>true</bool>
+           <bool>false</bool>
           </attribute>
          </widget>
         </item>
@@ -214,7 +211,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>993</width>
+     <width>1261</width>
      <height>22</height>
     </rect>
    </property>
@@ -253,7 +250,7 @@
   <widget class="QDockWidget" name="dockWidget_5">
    <property name="minimumSize">
     <size>
-     <width>363</width>
+     <width>707</width>
      <height>243</height>
     </size>
    </property>
@@ -291,43 +288,24 @@
              </item>
              <item>
               <widget class="QTableWidget" name="tableWidget_agents_select">
+               <property name="editTriggers">
+                <set>QAbstractItemView::NoEditTriggers</set>
+               </property>
                <property name="selectionMode">
                 <enum>QAbstractItemView::SingleSelection</enum>
                </property>
                <property name="selectionBehavior">
                 <enum>QAbstractItemView::SelectRows</enum>
                </property>
+               <property name="gridStyle">
+                <enum>Qt::SolidLine</enum>
+               </property>
                <property name="sortingEnabled">
-                <bool>true</bool>
+                <bool>false</bool>
                </property>
                <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
-                <bool>true</bool>
+                <bool>false</bool>
                </attribute>
-               <row>
-                <property name="text">
-                 <string>Trutle 1</string>
-                </property>
-               </row>
-               <row>
-                <property name="text">
-                 <string>Turtle 2</string>
-                </property>
-               </row>
-               <row>
-                <property name="text">
-                 <string>Turtle 3</string>
-                </property>
-               </row>
-               <column>
-                <property name="text">
-                 <string>Name</string>
-                </property>
-               </column>
-               <column>
-                <property name="text">
-                 <string>Type</string>
-                </property>
-               </column>
               </widget>
              </item>
              <item>
@@ -383,6 +361,12 @@
              </item>
              <item>
               <widget class="QStackedWidget" name="stackedWidget_agents_overviews">
+               <property name="minimumSize">
+                <size>
+                 <width>310</width>
+                 <height>0</height>
+                </size>
+               </property>
                <widget class="QWidget" name="page"/>
                <widget class="QWidget" name="page_2"/>
               </widget>
@@ -411,6 +395,9 @@
              </item>
              <item>
               <widget class="QTableWidget" name="tableWidget_tasks_select">
+               <property name="editTriggers">
+                <set>QAbstractItemView::NoEditTriggers</set>
+               </property>
                <property name="selectionMode">
                 <enum>QAbstractItemView::SingleSelection</enum>
                </property>
@@ -418,31 +405,11 @@
                 <enum>QAbstractItemView::SelectRows</enum>
                </property>
                <property name="sortingEnabled">
-                <bool>true</bool>
+                <bool>false</bool>
                </property>
                <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
-                <bool>true</bool>
+                <bool>false</bool>
                </attribute>
-               <row>
-                <property name="text">
-                 <string>Task 1</string>
-                </property>
-               </row>
-               <row>
-                <property name="text">
-                 <string>Task 2</string>
-                </property>
-               </row>
-               <column>
-                <property name="text">
-                 <string>Task id</string>
-                </property>
-               </column>
-               <column>
-                <property name="text">
-                 <string>Type</string>
-                </property>
-               </column>
               </widget>
              </item>
              <item>
@@ -497,7 +464,10 @@
               </widget>
              </item>
              <item>
-              <widget class="QWidget" name="widget_tasks_overview" native="true"/>
+              <widget class="QStackedWidget" name="stackedWidget_tasks_overviews">
+               <widget class="QWidget" name="page_3"/>
+               <widget class="QWidget" name="page_4"/>
+              </widget>
              </item>
             </layout>
            </item>
@@ -874,7 +844,7 @@
        <item row="1" column="0">
         <widget class="QProgressBar" name="progressBar_mission_progress">
          <property name="value">
-          <number>24</number>
+          <number>100</number>
          </property>
         </widget>
        </item>
@@ -893,18 +863,58 @@
        </item>
       </layout>
      </item>
+    </layout>
+   </widget>
+  </widget>
+  <widget class="QDockWidget" name="dockWidget">
+   <attribute name="dockWidgetArea">
+    <number>8</number>
+   </attribute>
+   <widget class="QWidget" name="dockWidgetContents">
+    <layout class="QVBoxLayout" name="verticalLayout_2">
      <item>
-      <spacer name="horizontalSpacer_2">
-       <property name="orientation">
-        <enum>Qt::Horizontal</enum>
+      <layout class="QHBoxLayout" name="horizontalLayout_4">
+       <item>
+        <spacer name="horizontalSpacer_4">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QLabel" name="label_10">
+         <property name="text">
+          <string>TextLabel</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="horizontalSpacer_2">
+         <property name="orientation">
+          <enum>Qt::Horizontal</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>40</width>
+           <height>20</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+      </layout>
+     </item>
+     <item>
+      <widget class="QPushButton" name="pushButton_reset_local_allocation_node">
+       <property name="text">
+        <string>Reset local allocation node</string>
        </property>
-       <property name="sizeHint" stdset="0">
-        <size>
-         <width>40</width>
-         <height>20</height>
-        </size>
-       </property>
-      </spacer>
+      </widget>
      </item>
     </layout>
    </widget>

@@ -11,6 +11,7 @@ from json import loads, dumps
 from copy import deepcopy
 import numpy as np
 import pandas as pd
+from functools import partial
 
 # Libs
 import PySide6
@@ -33,6 +34,7 @@ from .gcs_maaf_node import MAAFNode
 from .ui_singleton import UiSingleton
 
 from .AgentOverviewWidget import AgentOverviewWidget
+from .TaskOverviewWidget import TaskOverviewWidget
 
 ##################################################################################################################
 
@@ -53,15 +55,14 @@ class gcs_mission_interface(MAAFNode):
         # ---- Init parent class
         MAAFNode.__init__(self)
 
-        # ---- Extend singleton
-        self.ui.agents_overviews = {}
-        self.ui.tasks_overviews = {}
+        # -> Initial reset to initialize the node
+        self.__reset_local_allocation_node()
 
         # ---- Connect listeners
         # - Fleet listeners
-        self.fleet.add_on_add_item_listener(self.__update_agent_overview)
-        self.fleet.add_on_update_item_listener(self.__update_agent_overview)
-        self.fleet.add_on_remove_item_listener(self.__update_agent_overview)
+        self.fleet.add_on_add_item_listener(self.__update_agents)
+        self.fleet.add_on_update_item_listener(self.__update_agents)
+        self.fleet.add_on_remove_item_listener(self.__update_agents)
 
         # - Task log listeners
         self.task_log.add_on_add_item_listener(self.__update_tasks)
@@ -71,15 +72,27 @@ class gcs_mission_interface(MAAFNode):
         # -> QT timer based spin
         self.spin_timer = QtCore.QTimer()
         self.spin_timer.timeout.connect(self.__node_spinner)
-        self.spin_timer.setInterval(1)
-        self.spin_timer.start(10)
+        self.spin_timer.setInterval(100)
+        self.spin_timer.start()
 
         # ---- Connect signals
+        self.ui.pushButton_reset_local_allocation_node.clicked.connect(self.__reset_local_allocation_node)
+
         # -> Agent selection
-        self.ui.tableWidget_tasks_select.itemSelectionChanged.connect(self.__select_agent)
+        self.ui.tableWidget_agents_select.itemSelectionChanged.connect(
+            partial(self.__select_agent, source=self.ui.tableWidget_tasks_select)
+        )      # SIDE VIEW
+        self.ui.tableWidget_fleet_overview.itemSelectionChanged.connect(
+            partial(self.__select_agent, source=self.ui.tableWidget_fleet_overview)
+        )    # MAIN VIEW
 
         # -> Task selection
-        self.ui.tableWidget_tasks_select.itemSelectionChanged.connect(self.__select_task)
+        self.ui.tableWidget_tasks_select.itemSelectionChanged.connect(
+            partial(self.__select_task, source=self.ui.tableWidget_tasks_select)
+        )       # SIDE VIEW
+        self.ui.tableWidget_task_log_overview.itemSelectionChanged.connect(
+            partial(self.__select_task, source=self.ui.tableWidget_task_log_overview)
+        )   # MAIN VIEW
 
         # ----------------------------------- Final setup
         # -> Display windows
@@ -91,6 +104,57 @@ class gcs_mission_interface(MAAFNode):
         sys.exit(app.exec())
 
     # ============================================================== METHODS
+    def __reset_local_allocation_node(self):
+        # -> Reset allocation states
+        self.reset_allocation_states()
+
+        # -> Setup interface
+        self.ui.agents_overviews = {}
+        self.ui.tasks_overviews = {}
+
+        # -> Setup trackers
+        self.selected_agent_id = None
+        self.selected_task_id = None
+
+        self.current_agent_interface_view = None
+        self.current_task_interface_view = None
+
+    # ------------------------------ Create
+    def __create_agent(self, agent_id: dict) -> AgentOverviewWidget:
+        # -> Create widget
+        widget = AgentOverviewWidget(agent_id=agent_id, parent=self)
+
+        # -> Add to the agent overview dictionary
+        self.ui.agents_overviews[agent_id] = widget
+
+        # -> Add to the stacked widget
+        self.ui.stackedWidget_agents_overviews.addWidget(widget)
+
+        # -> Connect listeners
+        self.add_team_msg_subscriber_callback_listener(widget.update)
+        self.add_team_msg_subscriber_callback_listener(widget.add_to_logs)
+
+        return widget
+
+    def __create_task(self, task_id: dict) -> TaskOverviewWidget:
+        # -> Create widget
+        widget = TaskOverviewWidget(task=self.task_log[task_id], parent=self)
+
+        # -> Add to the task overview dictionary
+        self.ui.tasks_overviews[task_id] = widget
+
+        # -> Add to the stacked widget
+        self.ui.stackedWidget_tasks_overviews.addWidget(widget)
+
+        return widget
+
+    # ------------------------------ Track
+    def __track_current_agent_interface_view(self, current_interface_view: dict) -> None:
+        self.current_agent_interface_view = current_interface_view
+
+    def __track_current_task_interface_view(self, current_interface_view: dict) -> None:
+        self.current_task_interface_view = current_interface_view
+
     # ------------------------------ Update
     def __update_interface(self) -> None:
         """
@@ -128,17 +192,86 @@ class gcs_mission_interface(MAAFNode):
 
         self.ui.progressBar_mission_progress.setValue(mission_progress)
 
-    def __update_agent_overview(self, *args, **kwargs) -> None:
+    def __update_agents(self, *args, **kwargs) -> None:
         """
         Update the agent overview widgets
         """
 
-        print("Updating agent overview")
+        # ---- Update mission state overview
+        self.__update_mission_state_overview()
 
+        # ---- Update agent MAIN VIEW
+        # -> Construct table to display
+        agent_ids = []
+        agent_data = []
+
+        for agent in self.fleet:
+            if agent is self.agent:
+                continue
+
+            # -> Convert timestamp to human readable format
+            state_timestamp = pd.to_datetime(agent.state.timestamp, unit="s")
+            state_timestamp = state_timestamp.replace(microsecond=0, nanosecond=0)
+
+            agent_ids.append(agent.id)
+            agent_data.append(
+                [
+                    agent.name,
+                    agent.agent_class,
+                    agent.hierarchy_level,
+                    agent.affiliations,
+                    agent.specs,
+                    agent.skillset,
+                    (agent.state.x, agent.state.y, agent.state.z),
+                    (agent.state.u, agent.state.v, agent.state.w),
+                    agent.state.battery_level,
+                    agent.state.stuck,
+                    state_timestamp
+                ])
+
+        # -> If there are no agents, return
+        if len(agent_data) == 0:
+            # -> Clear tables
+            self.ui.tableWidget_fleet_overview.clear()
+            self.ui.tableWidget_agents_select.clear()
+
+            # -> Remove all rows
+            self.ui.tableWidget_fleet_overview.setRowCount(0)
+            self.ui.tableWidget_agents_select.setRowCount(0)
+
+            # -> Clear agent overviews
+            self.ui.agents_overviews = {}
+            return
+
+        # -> Update table
+        # > Set the column headers
+        headers = ["Name", "Class", "Rank", "Affiliations", "Specs", "Skillset", "Position", "Orientation", "Battery Level", "Stuck", "State Timestamp"]
+        self.ui.tableWidget_fleet_overview.setColumnCount(len(headers))
+        self.ui.tableWidget_fleet_overview.setHorizontalHeaderLabels(headers)
+
+        # > Set the ids as the row headers
+        self.ui.tableWidget_fleet_overview.setRowCount(len(agent_data))
+        self.ui.tableWidget_fleet_overview.setVerticalHeaderLabels([str(id) for id in agent_ids])
+
+        # > Enable word wrap for the row headers
+        self.ui.tableWidget_fleet_overview.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+
+        # > Set the data
+        for i, row in enumerate(agent_data):
+            for j, cell in enumerate(row):
+                self.ui.tableWidget_fleet_overview.setItem(i, j, QtWidgets.QTableWidgetItem(str(cell)))
+
+        # > Resize columns
+        self.ui.tableWidget_fleet_overview.resizeColumnsToContents()
+
+        # ---- Update fleet SIDE VIEW
         # -> Construct table to display
         agent_ids = []
         agent_data = []
         for agent in self.fleet:
+            if agent is self.agent:
+                continue
+
             agent_ids.append(agent.id)
             agent_data.append([agent.name, agent.agent_class])
 
@@ -163,14 +296,25 @@ class gcs_mission_interface(MAAFNode):
         # > Resize columns
         self.ui.tableWidget_tasks_select.resizeColumnsToContents()
 
+        # ---- Ensure all agents widgets are created
+        for agent_id in agent_ids:
+            if agent_id not in self.ui.agents_overviews:
+                self.__create_agent(agent_id=agent_id)
+
+        # -> Select first agent if no agent is selected
+        if not self.selected_agent_id:
+            self.ui.tableWidget_agents_select.selectRow(0)
+            self.__select_agent(source=self.ui.tableWidget_agents_select)
+
     def __update_tasks(self, *args, **kwargs) -> None:
         """
         Update the task overview widgets
         """
 
-        print("Updating task overview")
+        # ---- Update mission state overview
+        self.__update_mission_state_overview()
 
-        # ---- Update task log overview
+        # ---- Update task log MAIN VIEW
         # -> Construct table to display
         task_ids = []
         task_data = []
@@ -183,6 +327,20 @@ class gcs_mission_interface(MAAFNode):
             creation_timestamp = creation_timestamp.replace(microsecond=0, nanosecond=0)
 
             task_data.append([task.type, task.priority, creation_timestamp, task.creator, task.affiliations, task.status])
+
+        # -> If there are no agents, return
+        if len(task_data) == 0:
+            # -> Clear tables rows
+            self.ui.tableWidget_task_log_overview.clear()
+            self.ui.tableWidget_tasks_select.clear()
+
+            # -> Remove all rows
+            self.ui.tableWidget_task_log_overview.setRowCount(0)
+            self.ui.tableWidget_tasks_select.setRowCount(0)
+
+            # -> Clear agent overviews
+            self.ui.tasks_overviews = {}
+            return
 
         # -> Update table
         # > Set the column headers
@@ -205,7 +363,7 @@ class gcs_mission_interface(MAAFNode):
         # > Resize columns
         self.ui.tableWidget_task_log_overview.resizeColumnsToContents()
 
-        # ---- Update task overview
+        # ---- Update task log SIDE VIEW
         # -> Construct table to display
         task_ids = []
         task_data = []
@@ -239,42 +397,85 @@ class gcs_mission_interface(MAAFNode):
         # > Resize columns
         self.ui.tableWidget_tasks_select.resizeColumnsToContents()
 
+        # ---- Ensure all task widgets are created
+        for task_id in task_ids:
+            if task_id not in self.ui.tasks_overviews:
+                self.__create_task(task_id=task_id)
+
+        # -> Select first task if no task is selected
+        if not self.selected_task_id:
+            self.ui.tableWidget_tasks_select.selectRow(0)
+            self.__select_task(source=self.ui.tableWidget_tasks_select)
+
     # ------------------------------ Select
-    def __select_agent(self) -> None:
+    def __select_agent(self, source) -> None:
         """
         Select an agent from the agent overview table
         """
-        return
 
-        # -> Get the selected agent id
-        selected_agent_id = self.ui.tableWidget_agents_select.currentItem().row()
+        # -> Get selected agent id
+        if source == self.ui.tableWidget_fleet_overview:
+            # > Get selected row id
+            selected_agent_row = self.ui.tableWidget_fleet_overview.currentIndex().row()
+            selected_agent_id = self.ui.tableWidget_fleet_overview.verticalHeaderItem(selected_agent_row).text()
 
-        # -> Get the agent object
-        selected_agent = self.fleet[selected_agent_id]
-
-        # -> Get the agent overview widget
-        if selected_agent_id not in self.ui.agents_overviews:
-            # -> Create widget
-            widget = AgentOverviewWidget()
-
-            # -> Add to the agent overview dictionary
-            self.ui.agents_overviews[selected_agent_id] = widget
-
-            # -> Add to the stacked widget
-            self.ui.stackedWidget.addWidget(widget)
+            # > Select the corresponding agent in the side view
+            self.ui.tableWidget_agents_select.selectRow(selected_agent_row)
 
         else:
-            widget = self.ui.agents_overviews[selected_agent_id]
+            # -> Get the selected agent id
+            selected_agent_row = self.ui.tableWidget_agents_select.currentIndex().row()
+            selected_agent_id = self.ui.tableWidget_agents_select.verticalHeaderItem(selected_agent_row).text()
+
+            # > Select the corresponding agent in the main view
+            self.ui.tableWidget_fleet_overview.selectRow(selected_agent_row)
+
+        # -> Get the agent overview widget
+        widget = self.ui.agents_overviews[selected_agent_id]
+
+        # -> Get current agent interface view
+        if self.selected_agent_id is not None:
+            self.current_agent_interface_view = self.ui.agents_overviews[self.selected_agent_id].current_interface_view
+
+            # -> Set current agent interface view
+            widget.current_interface_view = self.current_agent_interface_view
 
         # -> Switch stacked widget to the agent overview
-        self.ui.stackedWidget.setCurrentWidget(widget)
+        self.ui.stackedWidget_agents_overviews.setCurrentWidget(widget)
 
-    def __select_task(self) -> None:
+        # -> Set the selected agent id
+        self.selected_agent_id = selected_agent_id
+
+    def __select_task(self, source) -> None:
         """
         Select a task from the task overview table
         """
 
-        pass
+        # -> Get selected task id
+        if source == self.ui.tableWidget_task_log_overview:
+            # > Get selected row id
+            selected_task_row = self.ui.tableWidget_task_log_overview.currentIndex().row()
+            selected_task_id = self.ui.tableWidget_task_log_overview.verticalHeaderItem(selected_task_row).text()
+
+            # > Select the corresponding task in the side view
+            self.ui.tableWidget_tasks_select.selectRow(selected_task_row)
+
+        else:
+            # -> Get the selected task id
+            selected_task_row = self.ui.tableWidget_tasks_select.currentIndex().row()
+            selected_task_id = self.ui.tableWidget_tasks_select.verticalHeaderItem(selected_task_row).text()
+
+            # > Select the corresponding task in the main view
+            self.ui.tableWidget_task_log_overview.selectRow(selected_task_row)
+
+        # -> Get the task overview widget
+        widget = self.ui.tasks_overviews[selected_task_id]
+
+        # -> Switch stacked widget to the task overview
+        self.ui.stackedWidget_tasks_overviews.setCurrentWidget(widget)
+
+        # -> Set the selected task id
+        self.selected_task_id = selected_task_id
 
     # ================================================= Custom ROS2 integration
     def __node_spinner(self):

@@ -4,19 +4,19 @@
 """
 """
 
-import sys
 import os
+import sys
 from typing import List, Optional
 from json import loads, dumps
 from copy import deepcopy
-import numpy as np
-import pandas as pd
 from functools import partial
+from threading import Thread
 
 # Libs
+import numpy as np
+import pandas as pd
 import PySide6
 from PySide6.QtCore import *
-import sys
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel
 from PySide6.QtGui import QIcon
@@ -27,7 +27,6 @@ from rclpy.node import Node
 from geometry_msgs.msg import Twist, PoseStamped, Point
 from sensor_msgs.msg import JointState, LaserScan
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
-import numpy as np
 
 # Local Imports
 from .gcs_maaf_node import MAAFNode
@@ -39,10 +38,10 @@ from .TaskOverviewWidget import TaskOverviewWidget
 ##################################################################################################################
 
 
-class gcs_mission_interface(MAAFNode):
+class gcs_mission_interface:
     def __init__(self):
         # ----------------------------------- Load GUI
-        app = QtWidgets.QApplication([])
+        app = QtWidgets.QApplication(sys.argv)
 
         # -> Load ui singleton
         self.ui = UiSingleton().interface
@@ -53,21 +52,23 @@ class gcs_mission_interface(MAAFNode):
 
         # ----------------------------------- Create Node
         # ---- Init parent class
-        MAAFNode.__init__(self)
+        # MAAFNode.__init__(self)
+
+        self.ros_node = MAAFNode()
 
         # -> Initial reset to initialize the node
         self.__reset_local_allocation_node()
 
         # ---- Connect listeners
         # - Fleet listeners
-        self.fleet.add_on_add_item_listener(self.__update_agents)
-        self.fleet.add_on_update_item_listener(self.__update_agents)
-        self.fleet.add_on_remove_item_listener(self.__update_agents)
+        self.ros_node.fleet.add_on_add_item_listener(self.__update_agents)
+        self.ros_node.fleet.add_on_update_item_listener(self.__update_agents)
+        self.ros_node.fleet.add_on_remove_item_listener(self.__update_agents)
 
         # - Task log listeners
-        self.task_log.add_on_add_item_listener(self.__update_tasks)
-        self.task_log.add_on_update_item_listener(self.__update_tasks)
-        self.task_log.add_on_remove_item_listener(self.__update_tasks)
+        self.ros_node.task_log.add_on_add_item_listener(self.__update_tasks)
+        self.ros_node.task_log.add_on_update_item_listener(self.__update_tasks)
+        self.ros_node.task_log.add_on_remove_item_listener(self.__update_tasks)
 
         # -> QT timer based spin
         self.spin_timer = QtCore.QTimer()
@@ -89,7 +90,7 @@ class gcs_mission_interface(MAAFNode):
         # -> Task selection
         self.ui.tableWidget_tasks_select.itemSelectionChanged.connect(
             partial(self.__select_task, source=self.ui.tableWidget_tasks_select)
-        )       # SIDE VIEW
+        )   # SIDE VIEW
         self.ui.tableWidget_task_log_overview.itemSelectionChanged.connect(
             partial(self.__select_task, source=self.ui.tableWidget_task_log_overview)
         )   # MAIN VIEW
@@ -98,15 +99,14 @@ class gcs_mission_interface(MAAFNode):
         # -> Display windows
         self.ui.show()
 
-        # -> Spin once
-        # rclpy.spin_once(self.node)
-
+        # ----------------------------------- Terminate ROS2 node on exit
+        # self.ros_node.destroy_node()
         sys.exit(app.exec())
 
     # ============================================================== METHODS
     def __reset_local_allocation_node(self):
         # -> Reset allocation states
-        self.reset_allocation_states()
+        self.ros_node.reset_allocation_states()
 
         # -> Setup interface
         self.ui.agents_overviews = {}
@@ -122,7 +122,7 @@ class gcs_mission_interface(MAAFNode):
     # ------------------------------ Create
     def __create_agent(self, agent_id: dict) -> AgentOverviewWidget:
         # -> Create widget
-        widget = AgentOverviewWidget(agent_id=agent_id, parent=self)
+        widget = AgentOverviewWidget(agent_id=agent_id, ros_node=self.ros_node)
 
         # -> Add to the agent overview dictionary
         self.ui.agents_overviews[agent_id] = widget
@@ -131,14 +131,14 @@ class gcs_mission_interface(MAAFNode):
         self.ui.stackedWidget_agents_overviews.addWidget(widget)
 
         # -> Connect listeners
-        self.add_team_msg_subscriber_callback_listener(widget.update)
-        self.add_team_msg_subscriber_callback_listener(widget.add_to_logs)
+        self.ros_node.add_team_msg_subscriber_callback_listener(widget.update)
+        self.ros_node.add_team_msg_subscriber_callback_listener(widget.add_to_logs)
 
         return widget
 
     def __create_task(self, task_id: dict) -> TaskOverviewWidget:
         # -> Create widget
-        widget = TaskOverviewWidget(task=self.task_log[task_id], parent=self)
+        widget = TaskOverviewWidget(task=self.ros_node.task_log[task_id], ros_node=self.ros_node)
 
         # -> Add to the task overview dictionary
         self.ui.tasks_overviews[task_id] = widget
@@ -168,27 +168,27 @@ class gcs_mission_interface(MAAFNode):
         """
 
         # ---- Fleet
-        self.ui.lcdNumber_agent_count_total.display(len(self.fleet))
-        self.ui.lcdNumber_agents_count_active.display(len(self.fleet.ids_active))
-        self.ui.lcdNumber_agents_count_inactive.display(len(self.fleet.ids_inactive))
+        self.ui.lcdNumber_agent_count_total.display(len(self.ros_node.fleet))
+        self.ui.lcdNumber_agents_count_active.display(len(self.ros_node.fleet.ids_active))
+        self.ui.lcdNumber_agents_count_inactive.display(len(self.ros_node.fleet.ids_inactive))
 
         # TODO: Implement agents free/busy
 
         # ---- Comms. state
         # TODO: Implement comms. state tracking
-        self.ui.lcdNumber_agent_count_total_2.display(len(self.fleet))
+        self.ui.lcdNumber_agent_count_total_2.display(len(self.ros_node.fleet))
 
         # ---- Tasks
-        self.ui.lcdNumber_tasks_count_total.display(len(self.task_log))
-        self.ui.lcdNumber_tasks_count_pending.display(len(self.task_log.ids_pending))
-        self.ui.lcdNumber_tasks_count_completed.display(len(self.task_log.ids_completed))
-        self.ui.lcdNumber_tasks_count_canceled.display(len(self.task_log.ids_cancelled))
+        self.ui.lcdNumber_tasks_count_total.display(len(self.ros_node.task_log))
+        self.ui.lcdNumber_tasks_count_pending.display(len(self.ros_node.task_log.ids_pending))
+        self.ui.lcdNumber_tasks_count_completed.display(len(self.ros_node.task_log.ids_completed))
+        self.ui.lcdNumber_tasks_count_canceled.display(len(self.ros_node.task_log.ids_cancelled))
 
         # ---- Mission progress
-        if len(self.task_log) == 0:
+        if len(self.ros_node.task_log) == 0:
             mission_progress = 0
         else:
-            mission_progress = (1 - len(self.task_log.ids_pending) / len(self.task_log)) * 100
+            mission_progress = (1 - len(self.ros_node.task_log.ids_pending) / len(self.ros_node.task_log)) * 100
 
         self.ui.progressBar_mission_progress.setValue(mission_progress)
 
@@ -200,13 +200,16 @@ class gcs_mission_interface(MAAFNode):
         # ---- Update mission state overview
         self.__update_mission_state_overview()
 
+        # -> Sort the fleet
+        self.ros_node.fleet.sort(key=lambda agent: agent.id)
+
         # ---- Update agent MAIN VIEW
         # -> Construct table to display
         agent_ids = []
         agent_data = []
 
-        for agent in self.fleet:
-            if agent is self.agent:
+        for agent in self.ros_node.fleet:
+            if agent is self.ros_node.agent:
                 continue
 
             # -> Convert timestamp to human readable format
@@ -264,12 +267,15 @@ class gcs_mission_interface(MAAFNode):
         # > Resize columns
         self.ui.tableWidget_fleet_overview.resizeColumnsToContents()
 
+        # > Sort the table by row header
+        self.ui.tableWidget_fleet_overview.sortItems(1, QtCore.Qt.AscendingOrder)
+
         # ---- Update fleet SIDE VIEW
         # -> Construct table to display
         agent_ids = []
         agent_data = []
-        for agent in self.fleet:
-            if agent is self.agent:
+        for agent in self.ros_node.fleet:
+            if agent is self.ros_node.agent:
                 continue
 
             agent_ids.append(agent.id)
@@ -296,6 +302,9 @@ class gcs_mission_interface(MAAFNode):
         # > Resize columns
         self.ui.tableWidget_tasks_select.resizeColumnsToContents()
 
+        # > Sort the table by row header
+        self.ui.tableWidget_agents_select.sortItems(1, QtCore.Qt.AscendingOrder)
+
         # ---- Ensure all agents widgets are created
         for agent_id in agent_ids:
             if agent_id not in self.ui.agents_overviews:
@@ -314,19 +323,21 @@ class gcs_mission_interface(MAAFNode):
         # ---- Update mission state overview
         self.__update_mission_state_overview()
 
+        self.ros_node.task_log.sort(key=lambda task: task.creation_timestamp, reverse=True)
+
         # ---- Update task log MAIN VIEW
         # -> Construct table to display
         task_ids = []
         task_data = []
 
-        for task in self.task_log:
+        for task in self.ros_node.task_log:
             task_ids.append(task.id)
 
             # -> Convert timestamp to human readable format
             creation_timestamp = pd.to_datetime(task.creation_timestamp, unit="s")
             creation_timestamp = creation_timestamp.replace(microsecond=0, nanosecond=0)
 
-            task_data.append([task.type, task.priority, creation_timestamp, task.creator, task.affiliations, task.status])
+            task_data.append([task.type, task.priority, creation_timestamp, task.creator, task.affiliations, task.status.capitalize(), task.termination_source_id])
 
         # -> If there are no agents, return
         if len(task_data) == 0:
@@ -344,7 +355,7 @@ class gcs_mission_interface(MAAFNode):
 
         # -> Update table
         # > Set the column headers
-        headers = ["Type", "Priority", "Creation Timestamp", "Creator", "Affiliations", "Status"]
+        headers = ["Type", "Priority", "Creation Timestamp", "Creator", "Affiliations", "Status", "Termination Source"]
         self.ui.tableWidget_task_log_overview.setColumnCount(len(headers))
         self.ui.tableWidget_task_log_overview.setHorizontalHeaderLabels(headers)
 
@@ -363,25 +374,29 @@ class gcs_mission_interface(MAAFNode):
         # > Resize columns
         self.ui.tableWidget_task_log_overview.resizeColumnsToContents()
 
+        # > Sort the table by row header
+        self.ui.tableWidget_task_log_overview.sortItems(1, QtCore.Qt.AscendingOrder)
+
         # ---- Update task log SIDE VIEW
         # -> Construct table to display
         task_ids = []
         task_data = []
-        for task in self.task_log:
+
+        for task in self.ros_node.task_log:
             task_ids.append(task.id)
 
             # -> Convert timestamp to human readable format
             creation_timestamp = pd.to_datetime(task.creation_timestamp, unit="s")
             creation_timestamp = creation_timestamp.replace(microsecond=0, nanosecond=0)
 
-            task_data.append([task.type, task.priority, creation_timestamp])
+            task_data.append([task.type, task.priority, creation_timestamp, task.status.capitalize()])
 
         # -> Update table
         self.ui.tableWidget_tasks_select.setRowCount(len(task_data))
         self.ui.tableWidget_tasks_select.setColumnCount(len(task_data[0]))
 
         # > Set the column headers
-        self.ui.tableWidget_tasks_select.setHorizontalHeaderLabels(["Type", "Priority", "Creation Timestamp"])
+        self.ui.tableWidget_tasks_select.setHorizontalHeaderLabels(["Type", "Priority", "Creation Timestamp", "Status"])
 
         # > Set the ids as the row headers
         self.ui.tableWidget_tasks_select.setVerticalHeaderLabels([str(id) for id in task_ids])
@@ -396,6 +411,9 @@ class gcs_mission_interface(MAAFNode):
 
         # > Resize columns
         self.ui.tableWidget_tasks_select.resizeColumnsToContents()
+
+        # > Sort the table by row header
+        self.ui.tableWidget_tasks_select.sortItems(1, QtCore.Qt.AscendingOrder)
 
         # ---- Ensure all task widgets are created
         for task_id in task_ids:
@@ -480,19 +498,44 @@ class gcs_mission_interface(MAAFNode):
     # ================================================= Custom ROS2 integration
     def __node_spinner(self):
         # -> Spin once
-        rclpy.spin_once(self)
+        rclpy.spin_once(self.ros_node, timeout_sec=0)
+        # rclpy.spin(self.ros_node)
 
-        # -> Update mission state overview
-        # self.__update_interface()
 
 
 def main(args=None):
     # `rclpy` library is initialized
     rclpy.init(args=args)
 
-    # app = QApplication(sys.argv)
-
     app = gcs_mission_interface()
+
+    rclpy.shutdown()
+
+# def main(args=None):
+#     # `rclpy` library is initialized
+#     rclpy.init(args=args)
+#
+#     ros_node = MAAFNode()
+#
+#     app = QtWidgets.QApplication(sys.argv)
+#     gui = gcs_mission_interface(ros_node=ros_node)
+#
+#     executor = MultiThreadedExecutor()
+#     executor.add_node(ros_node)
+#
+#     # -> Start the ROS2 node on a separate thread
+#     thread = Thread(target=executor.spin)
+#     thread.start()
+#
+#     # -> Start the GUI on the main thread
+#     try:
+#         gui.ui.show()
+#         sys.exit(app.exec())
+#
+#     finally:
+#         # `rclpy` library is shutdown
+#         ros_node.destroy_node()
+#         rclpy.shutdown()
 
 
 if __name__ == '__main__':

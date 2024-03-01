@@ -132,14 +132,14 @@
           <property name="defaultDropAction">
            <enum>Qt::TargetMoveAction</enum>
           </property>
+          <property name="alternatingRowColors">
+           <bool>true</bool>
+          </property>
           <property name="selectionMode">
            <enum>QAbstractItemView::SingleSelection</enum>
           </property>
           <property name="selectionBehavior">
            <enum>QAbstractItemView::SelectRows</enum>
-          </property>
-          <property name="sortingEnabled">
-           <bool>false</bool>
           </property>
          </widget>
         </item>
@@ -155,18 +155,18 @@
           <property name="editTriggers">
            <set>QAbstractItemView::NoEditTriggers</set>
           </property>
+          <property name="defaultDropAction">
+           <enum>Qt::TargetMoveAction</enum>
+          </property>
+          <property name="alternatingRowColors">
+           <bool>true</bool>
+          </property>
           <property name="selectionMode">
            <enum>QAbstractItemView::SingleSelection</enum>
           </property>
           <property name="selectionBehavior">
            <enum>QAbstractItemView::SelectRows</enum>
           </property>
-          <property name="sortingEnabled">
-           <bool>false</bool>
-          </property>
-          <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
-           <bool>false</bool>
-          </attribute>
          </widget>
         </item>
        </layout>
@@ -291,21 +291,18 @@
                <property name="editTriggers">
                 <set>QAbstractItemView::NoEditTriggers</set>
                </property>
+               <property name="defaultDropAction">
+                <enum>Qt::TargetMoveAction</enum>
+               </property>
+               <property name="alternatingRowColors">
+                <bool>true</bool>
+               </property>
                <property name="selectionMode">
                 <enum>QAbstractItemView::SingleSelection</enum>
                </property>
                <property name="selectionBehavior">
                 <enum>QAbstractItemView::SelectRows</enum>
                </property>
-               <property name="gridStyle">
-                <enum>Qt::SolidLine</enum>
-               </property>
-               <property name="sortingEnabled">
-                <bool>false</bool>
-               </property>
-               <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
-                <bool>false</bool>
-               </attribute>
               </widget>
              </item>
              <item>
@@ -398,18 +395,18 @@
                <property name="editTriggers">
                 <set>QAbstractItemView::NoEditTriggers</set>
                </property>
+               <property name="defaultDropAction">
+                <enum>Qt::TargetMoveAction</enum>
+               </property>
+               <property name="alternatingRowColors">
+                <bool>true</bool>
+               </property>
                <property name="selectionMode">
                 <enum>QAbstractItemView::SingleSelection</enum>
                </property>
                <property name="selectionBehavior">
                 <enum>QAbstractItemView::SelectRows</enum>
                </property>
-               <property name="sortingEnabled">
-                <bool>false</bool>
-               </property>
-               <attribute name="horizontalHeaderShowSortIndicator" stdset="0">
-                <bool>false</bool>
-               </attribute>
               </widget>
              </item>
              <item>

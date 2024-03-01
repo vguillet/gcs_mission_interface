@@ -367,8 +367,6 @@ class MAAFNode(MAAFAgent):
                 elif task.status != "pending" and self.task_log[task.id].status == "pending":
                     terminate_task(task=task)
 
-        # self.print_state(situation_awareness=False, local_allocation_state=False, shared_allocation_state=True)
-
     def __update_shared_states(
             self,
             received_shared_bids_b,
@@ -448,6 +446,9 @@ class MAAFNode(MAAFAgent):
         """
 
         if agent.state.timestamp >= self.fleet[agent.id].state.timestamp:
+            # -> Sort dataframe columns and index
+            received_allocation_state["shared_bids_b"] = received_allocation_state["shared_bids_b"].sort_index(axis=0).sort_index(axis=1)
+
             # -> Update local data fields
             self.fleet.update_item_fields(
                 item=agent,

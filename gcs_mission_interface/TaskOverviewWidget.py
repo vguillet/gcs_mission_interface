@@ -17,11 +17,11 @@ from .ui_loader import uic
 
 
 class TaskOverviewWidget(QWidget):
-    def __init__(self, task, parent):
+    def __init__(self, task, ros_node):
         super().__init__()
 
         self.task = task
-        self.parent = parent
+        self.ros_node = ros_node
 
         # ----------------------------------- Load GUI
         # -> Load ui singleton
@@ -66,7 +66,7 @@ class TaskOverviewWidget(QWidget):
         # -> Update agent state
         # > Last update timestamp
         # TODO: Finish fixing this
-        # time_elapsed_since_last_update = self.parent.current_timestamp - self.task.creation_timestamp
+        # time_elapsed_since_last_update = self.ros_node.current_timestamp - self.task.creation_timestamp
 
         # creation_timestamp = to_datetime(self.task.creation_timestamp, unit="s")
         # creation_timestamp = creation_timestamp.replace(microsecond=0, nanosecond=0)

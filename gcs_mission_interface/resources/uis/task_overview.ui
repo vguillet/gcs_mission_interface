@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>337</width>
-    <height>546</height>
+    <height>518</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -18,6 +18,20 @@
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
       <layout class="QVBoxLayout" name="verticalLayout">
+       <item>
+        <layout class="QHBoxLayout" name="horizontalLayout_2">
+         <item>
+          <widget class="QWidget" name="widget_task_type_icon" native="true"/>
+         </item>
+         <item>
+          <widget class="QLabel" name="label_task_type">
+           <property name="text">
+            <string>Type</string>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </item>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_12">
          <item>
@@ -30,23 +44,9 @@
          <item>
           <widget class="QLabel" name="label_task_id">
            <property name="text">
-            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-style:italic;&quot;&gt;ID&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+            <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;TextLabel&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
            </property>
           </widget>
-         </item>
-        </layout>
-       </item>
-       <item>
-        <layout class="QHBoxLayout" name="horizontalLayout_2">
-         <item>
-          <widget class="QLabel" name="label_task_type">
-           <property name="text">
-            <string>Type</string>
-           </property>
-          </widget>
-         </item>
-         <item>
-          <widget class="QWidget" name="widget_task_type_icon" native="true"/>
          </item>
         </layout>
        </item>
@@ -148,8 +148,8 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>297</width>
-            <height>296</height>
+            <width>267</width>
+            <height>260</height>
            </rect>
           </property>
           <attribute name="label">
@@ -270,8 +270,8 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>297</width>
-            <height>296</height>
+            <width>267</width>
+            <height>249</height>
            </rect>
           </property>
           <attribute name="label">
@@ -315,8 +315,8 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>297</width>
-            <height>296</height>
+            <width>267</width>
+            <height>249</height>
            </rect>
           </property>
           <attribute name="label">
@@ -352,8 +352,8 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>295</width>
-            <height>354</height>
+            <width>265</width>
+            <height>295</height>
            </rect>
           </property>
           <layout class="QVBoxLayout" name="verticalLayout_6">

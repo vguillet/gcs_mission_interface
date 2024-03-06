@@ -231,7 +231,7 @@ class GE_edge(Serializable):
             self.graphics.set_end(*start_pos)
 
         # -> Update edge bezier control points based on start and end edge positions
-        self.graphics.update()
+        self.graphics.refresh()
 
     # -------------------------------------------- Serialization
     def serialize(self):

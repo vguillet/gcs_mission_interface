@@ -212,8 +212,8 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>326</width>
-            <height>224</height>
+            <width>320</width>
+            <height>219</height>
            </rect>
           </property>
           <attribute name="label">
@@ -316,8 +316,8 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>297</width>
-            <height>230</height>
+            <width>88</width>
+            <height>88</height>
            </rect>
           </property>
           <attribute name="label">
@@ -672,38 +672,7 @@
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_16">
        <item>
-        <widget class="QScrollArea" name="scrollArea">
-         <property name="widgetResizable">
-          <bool>true</bool>
-         </property>
-         <widget class="QWidget" name="scrollAreaWidgetContents">
-          <property name="geometry">
-           <rect>
-            <x>0</x>
-            <y>0</y>
-            <width>295</width>
-            <height>248</height>
-           </rect>
-          </property>
-          <layout class="QVBoxLayout" name="verticalLayout_17">
-           <property name="leftMargin">
-            <number>0</number>
-           </property>
-           <property name="topMargin">
-            <number>0</number>
-           </property>
-           <property name="rightMargin">
-            <number>0</number>
-           </property>
-           <property name="bottomMargin">
-            <number>0</number>
-           </property>
-           <item>
-            <widget class="QPlainTextEdit" name="plainTextEdit_logs"/>
-           </item>
-          </layout>
-         </widget>
-        </widget>
+        <widget class="QPlainTextEdit" name="plainTextEdit_logs"/>
        </item>
        <item>
         <layout class="QHBoxLayout" name="horizontalLayout_13">

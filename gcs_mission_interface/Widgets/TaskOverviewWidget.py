@@ -11,7 +11,7 @@ from pandas import to_datetime
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 # Own modules
-from .ui_loader import uic
+from ..ui_loader import uic
 
 ##################################################################################################################
 
@@ -44,7 +44,7 @@ class TaskOverviewWidget(QWidget):
         # -> Update agent details
         # self.ui.label_task_name.setText(self.task.name)
         self.ui.label_task_id.setText(str(self.task.id))
-        self.ui.label_task_type.setText(self.task.type)
+        self.ui.label_task_type.setText(str(self.task.type))
 
         # > Metadata
         self.ui.label_task_creator.setText(self.task.creator)

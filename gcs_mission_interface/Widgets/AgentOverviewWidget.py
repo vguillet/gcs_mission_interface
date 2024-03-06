@@ -14,7 +14,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 # Own modules
-from .ui_loader import uic
+from ..ui_loader import uic
 
 ##################################################################################################################
 
@@ -204,60 +204,64 @@ class AgentOverviewWidget(QWidget):
         self.ui.label_current_rank.setText(str(self.ros_node.fleet[self.agent_id].hierarchy_level))
 
         # -> Allocation state
+        if "allocation_state" not in self.ros_node.fleet[self.agent_id].local.keys():
+            self.ros_node.get_logger().warning(f"Agent {self.ros_node.fleet[self.agent_id].id} has no allocation state ({self.ros_node.fleet[self.agent_id].local.keys()})")
+            return
+
         # > tableWidget_task_list_x
-        if "task_list_x" in self.ros_node.fleet[self.agent_id].local:
+        if "task_list_x" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_task_list_x,
-                data=self.ros_node.fleet[self.agent_id].local["task_list_x"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["task_list_x"]
             )
 
         # > tableWidget_local_bids_c
-        if "local_bids_c" in self.ros_node.fleet[self.agent_id].local:
+        if "local_bids_c" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_local_bids_c,
-                data=self.ros_node.fleet[self.agent_id].local["local_bids_c"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["local_bids_c"]
             )
 
         # > tableWidget_local_allocations_d
-        if "local_allocations_d" in self.ros_node.fleet[self.agent_id].local:
+        if "local_allocations_d" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_local_allocations_d,
-                data=self.ros_node.fleet[self.agent_id].local["local_allocations_d"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["local_allocations_d"]
             )
 
         # > tableWidget_winning_bids_y
-        if "winning_bids_y" in self.ros_node.fleet[self.agent_id].local:
+        if "winning_bids_y" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_winning_bids_y,
-                data=self.ros_node.fleet[self.agent_id].local["winning_bids_y"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["winning_bids_y"]
             )
 
         # > tableWidget_shared_bids_b
-        if "shared_bids_b" in self.ros_node.fleet[self.agent_id].local:
+        if "shared_bids_b" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_shared_bids_b,
-                data=self.ros_node.fleet[self.agent_id].local["shared_bids_b"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["shared_bids_b"]
             )
 
         # > tableWidget_shared_bids_priority_beta
-        if "shared_bids_priority_beta" in self.ros_node.fleet[self.agent_id].local:
+        if "shared_bids_priority_beta" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_shared_bids_priority_beta,
-                data=self.ros_node.fleet[self.agent_id].local["shared_bids_priority_beta"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["shared_bids_priority_beta"]
             )
 
         # > tableWidget_shared_allocations_a
-        if "shared_allocations_a" in self.ros_node.fleet[self.agent_id].local:
+        if "shared_allocations_a" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_shared_allocations_a,
-                data=self.ros_node.fleet[self.agent_id].local["shared_allocations_a"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["shared_allocations_a"]
             )
 
         # > tableWidget_shared_allocation_priority_alpha
-        if "shared_allocations_priority_alpha" in self.ros_node.fleet[self.agent_id].local:
+        if "shared_allocations_priority_alpha" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_shared_allocation_priority_alpha,
-                data=self.ros_node.fleet[self.agent_id].local["shared_allocations_priority_alpha"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["shared_allocations_priority_alpha"]
             )
 
     def __set_table_widget(self, table_widget, data):

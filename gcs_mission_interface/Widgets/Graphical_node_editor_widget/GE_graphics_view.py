@@ -202,11 +202,11 @@ class GE_graphics_view(QGraphicsView):
             self.dragged_edge.graphics.set_end(scene_pos.x(), scene_pos.y())
 
             # -> Update edge graphics
-            self.dragged_edge.graphics.update()
+            self.dragged_edge.graphics.refresh()
 
         if self.mode == MODE_EDGE_CUT and self.cutline is not None:
             self.cutline.line_points.append(scene_pos)
-            self.cutline.update()
+            self.cutline.refresh()
 
         # -> Emit scenePosChanged signal
         self.last_scene_mouse_position = self.mapToScene(event.pos())
@@ -347,7 +347,7 @@ class GE_graphics_view(QGraphicsView):
 
             # -> Reset cutline
             self.cutline.line_points = []
-            self.cutline.update()
+            self.cutline.refresh()
 
             # -> Change cursor to arrow
             QApplication.setOverrideCursor(Qt.ArrowCursor)

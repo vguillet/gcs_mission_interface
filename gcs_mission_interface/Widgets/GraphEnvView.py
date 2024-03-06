@@ -89,6 +89,41 @@ class GraphEnvView(QWidget):
         # -> Add agents locations to the plot with legend
         offset = 0.2
 
+        task_marker_types = {
+            "GOTO": {
+                "marker": "x",
+                "color": "green"
+            },
+            ACTION_1: {
+                "marker": "1",
+                "color": "green"
+            },
+            ACTION_2: {
+                "marker": "2",
+                "color": "green"
+            }
+        }
+
+        for task in self.ros_node.task_log.tasks_pending:
+            if task.type == NO_TASK:
+                continue
+
+            # -> Plot task with task id under the marker and marker type
+            self.axes.text(task.instructions["x"], task.instructions["y"] - 2 * offset, task.id, fontsize=10,
+                           ha="center", va="center", color="black")
+            self.axes.text(task.instructions["x"], task.instructions["y"] - 3 * offset, task.type, fontsize=8,
+                           ha="center", va="center", color="black")
+
+            self.axes.plot(
+                task.instructions["x"],
+                task.instructions["y"],
+                task_marker_types[task.type]["marker"],
+                color=task_marker_types[task.type]["color"],
+                label=task.id,
+                markersize=10,
+                markeredgewidth=3
+            )
+
         for agent in self.ros_node.fleet:
             if agent.skillset == ["INTERFACE"]:
                 continue
@@ -137,40 +172,6 @@ class GraphEnvView(QWidget):
                 #     color="black",
                 #     label=f"{agent.id} path"
                 # )
-
-        task_marker_types = {
-            "GOTO": {
-                "marker": "x",
-                "color": "green"
-            },
-            ACTION_1: {
-                "marker": "1",
-                "color": "green"
-            },
-            ACTION_2: {
-                "marker": "2",
-                "color": "green"
-            }
-        }
-
-        for task in self.ros_node.task_log.tasks_pending:
-            if task.type == NO_TASK:
-                continue
-
-            # -> Plot task with task id under the marker and marker type
-            self.axes.text(task.instructions["x"], task.instructions["y"] - 2*offset, task.id, fontsize=10, ha="center", va="center", color="black")
-            self.axes.text(task.instructions["x"], task.instructions["y"] - 3*offset, task.type, fontsize=8, ha="center", va="center", color="black")
-
-            self.axes.plot(
-                task.instructions["x"],
-                task.instructions["y"],
-                task_marker_types[task.type]["marker"],
-                color=task_marker_types[task.type]["color"],
-                label=task.id,
-                markersize=10,
-                markeredgewidth=3
-            )
-
 
         # -> Add legend
         # self.axes.legend()

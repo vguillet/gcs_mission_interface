@@ -205,7 +205,7 @@ class AgentOverviewWidget(QWidget):
 
         # -> Allocation state
         if "allocation_state" not in self.ros_node.fleet[self.agent_id].local.keys():
-            self.ros_node.get_logger().warning(f"Agent {self.ros_node.fleet[self.agent_id].id} has no allocation state ({self.ros_node.fleet[self.agent_id].local.keys()})")
+            # self.ros_node.get_logger().warning(f"Agent {self.ros_node.fleet[self.agent_id].id} has no allocation state ({self.ros_node.fleet[self.agent_id].local.keys()})")
             return
 
         # > tableWidget_task_list_x

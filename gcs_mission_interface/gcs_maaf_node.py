@@ -61,7 +61,7 @@ class MAAFNode(MAAFAgent):
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             durability=QoSDurabilityPolicy.VOLATILE,
             history=QoSHistoryPolicy.KEEP_LAST,
-            depth=10
+            depth=3
         )
 
         if RUN_MODE == OPERATIONAL:

@@ -82,7 +82,9 @@ class GraphEnvView(QWidget):
         nx.draw(self.ros_node.env["graph"],
                 pos=self.ros_node.env["pos"],
                 ax=self.axes,
-                node_size=450,
+                node_size=150,
+                width=5,
+                edge_color="gray",
                 node_color="lightblue",
                 font_size=8)
 
@@ -94,35 +96,61 @@ class GraphEnvView(QWidget):
                 "marker": "x",
                 "color": "green"
             },
-            ACTION_1: {
+            "ACTION_1": {
                 "marker": "1",
-                "color": "green"
+                "color": "red"
             },
-            ACTION_2: {
+            "ACTION_2": {
                 "marker": "2",
-                "color": "green"
+                "color": "orange"
+            },
+            "NO_TASK": {
+                "marker": "2",
+                "color": "gray"
             }
         }
 
         for task in self.ros_node.task_log.tasks_pending:
-            if task.type == NO_TASK:
-                continue
-
             # -> Plot task with task id under the marker and marker type
             self.axes.text(task.instructions["x"], task.instructions["y"] - 2 * offset, task.id, fontsize=10,
                            ha="center", va="center", color="black")
-            self.axes.text(task.instructions["x"], task.instructions["y"] - 3 * offset, task.type, fontsize=8,
-                           ha="center", va="center", color="black")
+            # self.axes.text(task.instructions["x"], task.instructions["y"] - 3 * offset, task.type, fontsize=8,
+            #                ha="center", va="center", color="black")
+
+            # > Get color
+            if task.type == "GOTO":
+                color = task_marker_types[task.instructions["ACTION_AT_LOC"]]["color"]
+            else:
+                color = task_marker_types[task.type]["color"]
 
             self.axes.plot(
                 task.instructions["x"],
                 task.instructions["y"],
                 task_marker_types[task.type]["marker"],
-                color=task_marker_types[task.type]["color"],
+                color=color,
                 label=task.id,
                 markersize=10,
                 markeredgewidth=3
             )
+
+        agent_marker_types = {
+            "ACTION_1": {
+                "marker": "1",
+                "color": task_marker_types["ACTION_1"]["color"]
+            },
+            "ACTION_2": {
+                "marker": "2",
+                "color": task_marker_types["ACTION_2"]["color"]
+            },
+            "ACTION_1/2": {
+                "marker": "2",
+                "color": "blue"
+            },
+            "NO_TASK": {
+                "marker": "2",
+                "color": task_marker_types["NO_TASK"]["color"]
+            }
+        }
 
         for agent in self.ros_node.fleet:
             if agent.skillset == ["INTERFACE"]:
@@ -131,19 +159,38 @@ class GraphEnvView(QWidget):
             # -> Plot agent position
             x, y = agent.state.x, agent.state.y
 
+            # > Get color
+            if "ACTION_1" in agent.skillset and "ACTION_2" in agent.skillset:
+                color = agent_marker_types["ACTION_1/2"]["color"]
+            elif "ACTION_1" in agent.skillset:
+                color = agent_marker_types["ACTION_1"]["color"]
+            elif "ACTION_2" in agent.skillset:
+                color = agent_marker_types["ACTION_2"]["color"]
+            else:
+                color = agent_marker_types["NO_TASK"]["color"]
+
+            if "goal" in agent.shared:
+                self.axes.plot(
+                    agent.shared["goal"]["path"]["x"],
+                    agent.shared["goal"]["path"]["y"],
+                    # linestyle="--",
+                    color=color,
+                    label=f"{agent.id} path"
+                )
+
             self.axes.plot(
                 x,
                 y,
                 "o",
-                color="blue",
+                color=color,
                 label=agent.id,
                 markersize=10,
                 markeredgewidth=3
             )
 
             # -> Plot agents with agent name and markers representing skills under the marker
-            self.axes.text(x, y - 2*offset, agent.id, fontsize=10, ha="center", va="center", color="black")
-            self.axes.text(x, y - 3*offset, agent.skillset, fontsize=8, ha="center", va="center", color="black")
+            self.axes.text(x + 2*offset, y + 2*offset, agent.id, fontsize=10, ha="center", va="center", color="black")
+            # self.axes.text(x + 2*offset, y + 1*offset, agent.skillset, fontsize=4, ha="center", va="center", color="black")
 
                 # # -> Get agent goal position
                 # x, y = agent.local["goal"]["instructions"]["x"], agent.local["goal"]["instructions"]["y"]

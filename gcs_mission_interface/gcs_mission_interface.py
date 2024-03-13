@@ -30,8 +30,10 @@ from sensor_msgs.msg import JointState, LaserScan
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 # Local Imports
+from orchestra_config.orchestra_config import *     # KEEP THIS LINE, DO NOT REMOVE
 from maaf_allocation_node.fleet_dataclasses import Agent, Fleet
 from maaf_allocation_node.task_dataclasses import Task, Task_log
+from maaf_allocation_node.tools import *
 
 from .gcs_maaf_node import MAAFNode
 from .ui_singleton import UiSingleton
@@ -142,6 +144,10 @@ class gcs_mission_interface:
 
     # ------------------------------ Create
     def __create_agent(self, agent: Agent, *args, **kwargs) -> None:
+        """
+        Create all the widgets and subscribers for the agent
+        """
+        # ----- Overview widget
         # -> Create widget
         widget = AgentOverviewWidget(agent_id=agent.id, ros_node=self.ros_node)
 
@@ -154,6 +160,18 @@ class gcs_mission_interface:
         # -> Connect widget listeners
         self.ros_node.add_team_msg_subscriber_callback_listener(widget.update)
         self.ros_node.add_team_msg_subscriber_callback_listener(widget.add_to_logs)
+
+        # ----- Pose subscriber
+        # -> Create subscriber
+        pose_subscriber = self.ros_node.create_subscription(
+            msg_type=PoseStamped,
+            topic=f"/{agent.id}{topic_pose}",
+            callback=partial(self.pose_subscriber_callback, agent=agent),
+            qos_profile=qos_pose
+        )
+
+        # -> Add to the agent local
+        agent.local["pose_subscriber"] = pose_subscriber
 
     def __create_task(self, task: Task, *args, **kwargs) -> None:
         # -> Create overview widget
@@ -571,6 +589,27 @@ class gcs_mission_interface:
         self.selected_task_id = selected_task_id
 
     # ================================================= Custom ROS2 integration
+    def pose_subscriber_callback(self, pose_msg, agent) -> None:
+        """
+        Callback for the pose subscriber
+
+        :param pose_msg: PoseStamped message
+        """
+        # -> Convert quaternion to euler
+        u, v, w = euler_from_quaternion(quat=pose_msg.pose.orientation)
+
+        # -> Update state
+        # > Pose
+        agent.state.x = pose_msg.pose.position.x
+        agent.state.y = pose_msg.pose.position.y
+        agent.state.z = pose_msg.pose.position.z
+        agent.state.u = u
+        agent.state.v = v
+        agent.state.w = w
+
+        # > Timestamp   # TODO: Review
+        # agent.state.timestamp = pose_msg.header.stamp.sec + pose_msg.header.stamp.nanosec * 1e-9
+
     def __node_spinner(self):
         # -> Spin once
         rclpy.spin_once(self.ros_node, timeout_sec=0)

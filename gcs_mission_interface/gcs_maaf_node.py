@@ -501,8 +501,8 @@ class MAAFNode(MAAFAgent):
         print(f">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Agent {self.id} state:")
         if situation_awareness:
             print("----- Situation awareness")
-            pprint(self.task_log.to_list())
-            pprint(self.fleet.to_list())
+            pprint(self.task_log.asdict())
+            pprint(self.fleet.asdict())
 
         if local_allocation_state:
             print("\nLocal bids c:")

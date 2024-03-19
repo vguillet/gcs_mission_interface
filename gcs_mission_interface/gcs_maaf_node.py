@@ -32,11 +32,18 @@ import numpy as np
 
 # Local Imports
 from orchestra_config.orchestra_config import *     # KEEP THIS LINE, DO NOT REMOVE
+from orchestra_config.sim_config import *
+
 from maaf_allocation_node.maaf_agent import MAAFAgent
-from maaf_allocation_node.node_config import *
-from maaf_allocation_node.task_dataclasses import Task, Task_log
-from maaf_allocation_node.fleet_dataclasses import Agent, Fleet
-from maaf_allocation_node.state_dataclasses import Agent_state
+
+from maaf_tools.datastructures.task.Task import Task
+from maaf_tools.datastructures.task.TaskLog import TaskLog
+
+from maaf_tools.datastructures.agent.Agent import Agent
+from maaf_tools.datastructures.agent.Fleet import Fleet
+from maaf_tools.datastructures.agent.AgentState import AgentState
+from maaf_tools.datastructures.agent.Plan import Plan
+
 from maaf_msgs.msg import TeamCommStamped, Bid, Allocation
 
 from .ui_singleton import UiSingleton
@@ -165,18 +172,18 @@ class MAAFNode(MAAFAgent):
         # -> If the message is not for the agent...
         if msg_target != self.id and msg_target != "all":
             # -> Check if the agent should rebroadcast the message
-            msg, rebroadcast = self.rebroadcast(msg=team_msg, publisher=self.fleet_msgs_pub)
+            # msg, rebroadcast = self.rebroadcast(msg=team_msg, publisher=self.fleet_msgs_pub)
             return
 
         # -> Deserialise allocation state
         received_allocation_state = self.deserialise(state=team_msg.memo)
 
         # -> Update local situation awareness
-        # > Convert task list to Task objects
-        received_task_log = [Task.from_dict(task) for task in received_allocation_state["tasks"]]
+        # > Convert received serialised task_log to task_log
+        received_task_log = TaskLog.from_dict(received_allocation_state["tasks"])
 
-        # > Convert fleet to Agent objects
-        received_fleet = [Agent.from_dict(agent) for agent in received_allocation_state["fleet"]]
+        # > Convert received serialised fleet to fleet
+        received_fleet = Fleet.from_dict(received_allocation_state["fleet"])
 
         self.__update_situation_awareness(
             task_list=received_task_log,
@@ -366,6 +373,7 @@ class MAAFNode(MAAFAgent):
                     # -> If the agent is active, update the agent state in the fleet to the latest state
                     if agent.state.status == "active":
                         self.fleet.set_agent_state(agent=agent, state=agent.state)
+                        self.fleet.set_agent_plan(agent=agent, plan=agent.plan)
 
                     # -> If the agent is inactive, update state and remove agent from local states
                     else:

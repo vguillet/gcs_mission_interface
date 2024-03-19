@@ -31,9 +31,16 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 # Local Imports
 from orchestra_config.orchestra_config import *     # KEEP THIS LINE, DO NOT REMOVE
-from maaf_allocation_node.fleet_dataclasses import Agent, Fleet
-from maaf_allocation_node.task_dataclasses import Task, Task_log
-from maaf_allocation_node.tools import *
+
+from maaf_tools.datastructures.task.Task import Task
+from maaf_tools.datastructures.task.TaskLog import TaskLog
+
+from maaf_tools.datastructures.agent.Agent import Agent
+from maaf_tools.datastructures.agent.Fleet import Fleet
+from maaf_tools.datastructures.agent.AgentState import AgentState
+from maaf_tools.datastructures.agent.Plan import Plan
+
+from maaf_tools.tools import *
 
 from .gcs_maaf_node import MAAFNode
 from .ui_singleton import UiSingleton

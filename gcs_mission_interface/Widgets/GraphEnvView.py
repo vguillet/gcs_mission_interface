@@ -21,7 +21,7 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationTool
 from matplotlib.figure import Figure
 
 # Own modules
-from maaf_allocation_node.node_config import *
+from orchestra_config.sim_config import *
 from ..ui_loader import uic
 
 ##################################################################################################################
@@ -152,11 +152,43 @@ class GraphEnvView(QWidget):
             }
         }
 
+        # -> Plot agents paths
         for agent in self.ros_node.fleet:
             if agent.skillset == ["INTERFACE"]:
                 continue
 
-            # -> Plot agent position
+            # > Get agent path
+            x_list, y_list = [], []
+
+            for step in agent.plan.path:
+                x_list.append(step[0])
+                y_list.append(step[1])
+
+            # > Get color
+            if "ACTION_1" in agent.skillset and "ACTION_2" in agent.skillset:
+                color = agent_marker_types["ACTION_1/2"]["color"]
+            elif "ACTION_1" in agent.skillset:
+                color = agent_marker_types["ACTION_1"]["color"]
+            elif "ACTION_2" in agent.skillset:
+                color = agent_marker_types["ACTION_2"]["color"]
+            else:
+                color = agent_marker_types["NO_TASK"]["color"]
+
+            # > Plot agent path
+            self.axes.plot(
+                x_list,
+                y_list,
+                # linestyle="--",
+                color=color,
+                label=f"{agent.id} path"
+            )
+
+        # -> Plot agent position
+        for agent in self.ros_node.fleet:
+            if agent.skillset == ["INTERFACE"]:
+                continue
+
+            # > Get agent position
             x, y = agent.state.x, agent.state.y
 
             # > Get color
@@ -169,15 +201,7 @@ class GraphEnvView(QWidget):
             else:
                 color = agent_marker_types["NO_TASK"]["color"]
 
-            if "goal" in agent.shared:
-                self.axes.plot(
-                    agent.shared["goal"]["path"]["x"],
-                    agent.shared["goal"]["path"]["y"],
-                    # linestyle="--",
-                    color=color,
-                    label=f"{agent.id} path"
-                )
-
+            # > Plot agent position
             self.axes.plot(
                 x,
                 y,
@@ -191,34 +215,6 @@ class GraphEnvView(QWidget):
             # -> Plot agents with agent name and markers representing skills under the marker
             self.axes.text(x + 2*offset, y + 2*offset, agent.id, fontsize=10, ha="center", va="center", color="black")
             # self.axes.text(x + 2*offset, y + 1*offset, agent.skillset, fontsize=4, ha="center", va="center", color="black")
-
-                # # -> Get agent goal position
-                # x, y = agent.local["goal"]["instructions"]["x"], agent.local["goal"]["instructions"]["y"]
-                #
-                # # -> Plot task with task id under the marker and marker type
-                # self.axes.text(x, y - 2*offset, agent.local["goal"]["id"], fontsize=12, ha="center", va="center", color="black")
-                # self.axes.text(x, y - 3*offset, agent.local["goal"]["type"], fontsize=8, ha="center", va="center", color="black")
-                #
-                # self.axes.plot(
-                #     x,
-                #     y,
-                #     task_marker_types[agent.local["goal"]["type"]]["marker"],
-                #     color=task_marker_types[agent.local["goal"]["type"]]["color"],
-                #     label=agent.local["goal"]["id"],
-                #     markersize=15,
-                #     markeredgewidth=3
-                # )
-
-                # # -> Plot the agent path to the goal
-                # path_x, path_y = agent.local["goal"]["shared"]["path"]["x"], agent.local["goal"]["shared"]["path"]["y"]
-                #
-                # self.axes.plot(
-                #     path_x,
-                #     path_y,
-                #     linestyle="--",
-                #     color="black",
-                #     label=f"{agent.id} path"
-                # )
 
         # -> Add legend
         # self.axes.legend()

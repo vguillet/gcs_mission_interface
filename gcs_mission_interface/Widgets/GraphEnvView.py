@@ -400,18 +400,20 @@ class GraphEnvView(QWidget):
             agent_x, agent_y = agent.state.x, agent.state.y
 
             # ----- Agent Path
-            # -> Get index of agent position in path
-            try:
+            # -> Get path
+            path = [(agent_x, agent_y)]
+
+            if agent.plan is not None:
                 # -> Set all path points to int
-                path = [(int(x), int(y)) for x, y in agent.plan.path]
-                agent_loc_index = path.index((agent_x, agent_y))
-            except:
-                agent_loc_index = 0
+                path += [(int(step[0]), int(step[1])) for step in agent.plan.path]
+
+            else:
+                print(f"!!! Agent {agent.id} has no plan !!!")
 
             # > Get agent path
             x_list, y_list = [], []
 
-            for step in agent.plan.path[agent_loc_index:]:
+            for step in path:
                 x_list.append(step[0])
                 y_list.append(step[1])
 

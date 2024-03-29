@@ -76,9 +76,9 @@ class NucleusSingleton(metaclass=Singleton):
 
         self.id = None
         self.fleet = Fleet()
-        self.task_log = TaskLog()
+        self.tasklog = TaskLog()
 
         # self.fleet = FleetSingleton()
-        # self.task_log = TaskLogSingleton()
+        # self.tasklog = TaskLogSingleton()
 
         self.env = {}

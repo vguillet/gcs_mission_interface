@@ -60,7 +60,7 @@ class GraphEnvView(QWidget):
 
         # self.env = copy(self.nucleus.env)
         self.fleet = copy(self.nucleus.fleet)
-        self.task_log = copy(self.nucleus.task_log)
+        self.tasklog = copy(self.nucleus.tasklog)
 
         # -> Widget settings
         self.show_goals = True
@@ -185,10 +185,10 @@ class GraphEnvView(QWidget):
     def update_plot(self):
         start = time.time()
 
-        task_log = self.task_log.clone()
+        tasklog = self.tasklog.clone()
         fleet = self.fleet.clone()
 
-        for task in task_log.tasks_terminated:
+        for task in tasklog.tasks_terminated:
             # -> Check if any artist exists
             if task.id in self.env_view_obj["tasks"].keys():
                 for artist in self.env_view_obj["tasks"][task.id].values():
@@ -204,7 +204,7 @@ class GraphEnvView(QWidget):
 
         # ----- Plot Tasks
         # # -> Compile dict of tasks by task type and action
-        # tasks_df = self.task_log.asdf()
+        # tasks_df = self.tasklog.asdf()
         #
         # # > Add pen column based on task type and action
         # def get_pen(task_type, task_action):
@@ -285,7 +285,7 @@ class GraphEnvView(QWidget):
         #             # -> Update artist position
         #             self.env_view_obj["tasks"][task_type][task_action].setData(pos=np.array(markers_pos))
 
-        for task in task_log.tasks_pending:
+        for task in tasklog.tasks_pending:
             if task.id not in self.env_view_obj["tasks"].keys():
                 self.env_view_obj["tasks"][task.id] = {}
 
@@ -401,14 +401,17 @@ class GraphEnvView(QWidget):
 
             # ----- Agent Path
             # -> Get path
-            path = [(agent_x, agent_y)]
-
             if agent.plan is not None:
                 # -> Set all path points to int
-                path += [(int(step[0]), int(step[1])) for step in agent.plan.path]
+                path = [(int(step[0]), int(step[1])) for step in agent.plan.path]
 
             else:
+                path = [(agent_x, agent_y)]
                 print(f"!!! Agent {agent.id} has no plan !!!")
+
+            # -> Trim path to current position if agent has tasks in its plan
+            if agent.plan.task_bundle:
+                path = path[path.index((agent_x, agent_y)):]
 
             # > Get agent path
             x_list, y_list = [], []

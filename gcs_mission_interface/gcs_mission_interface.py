@@ -86,7 +86,7 @@ class gcs_mission_interface:
         # > Create shallow copy to avoid concurrent access
         # self.env = copy(self.nucleus.env)
         self.fleet = copy(self.nucleus.fleet)
-        self.task_log = copy(self.nucleus.task_log)
+        self.tasklog = copy(self.nucleus.tasklog)
 
         # ----------------------------------- Add all update methods reference to the nucleus
         # self.nucleus.update_all = self.__update_all
@@ -202,21 +202,21 @@ class gcs_mission_interface:
         # - Task log listeners
         # > Task log add item
         self.eventbus.subscribe(
-            topic=["ros_node", "task_log", "add_item"],
+            topic=["ros_node", "tasklog", "add_item"],
             callbacks=self.__create_task,
             subscriber_id="add_task"
         )
 
         # > Task log remove item
         self.eventbus.subscribe(
-            topic=["ros_node", "task_log", "remove_item"],
+            topic=["ros_node", "tasklog", "remove_item"],
             callbacks=self.__update_tasks,      # TODO: Fix once remove task is implemented
             subscriber_id="remove_task"
         )
 
         # > Task log status change
         self.eventbus.subscribe(
-            topic=["ros_node", "task_log", "status_change"],
+            topic=["ros_node", "tasklog", "status_change"],
             callbacks=[
                 self.__update_tasks,
                 # self.__update_env_view
@@ -238,7 +238,7 @@ class gcs_mission_interface:
         for agent in self.ros_node.fleet:
             agent.local["overview_widget"] = None
 
-        for task in self.ros_node.task_log:
+        for task in self.ros_node.tasklog:
             task.local["overview_widget"] = None
             task.local["base_widget"] = None
 
@@ -394,7 +394,7 @@ class gcs_mission_interface:
 
         # -> Clone the fleet and task log to avoid concurrent access
         fleet = self.fleet.clone()
-        task_log = self.task_log.clone()
+        tasklog = self.tasklog.clone()
 
         # ---- Fleet
         self.ui.lcdNumber_agent_count_total.display(len(fleet))
@@ -408,16 +408,16 @@ class gcs_mission_interface:
         self.ui.lcdNumber_agent_count_total_2.display(len(fleet))
 
         # ---- Tasks
-        self.ui.lcdNumber_tasks_count_total.display(len(task_log))
-        self.ui.lcdNumber_tasks_count_pending.display(len(task_log.ids_pending))
-        self.ui.lcdNumber_tasks_count_completed.display(len(task_log.ids_completed))
-        self.ui.lcdNumber_tasks_count_canceled.display(len(task_log.ids_cancelled))
+        self.ui.lcdNumber_tasks_count_total.display(len(tasklog))
+        self.ui.lcdNumber_tasks_count_pending.display(len(tasklog.ids_pending))
+        self.ui.lcdNumber_tasks_count_completed.display(len(tasklog.ids_completed))
+        self.ui.lcdNumber_tasks_count_canceled.display(len(tasklog.ids_cancelled))
 
         # ---- Mission progress
-        if len(task_log) == 0:
+        if len(tasklog) == 0:
             mission_progress = 0
         else:
-            mission_progress = (1 - len(task_log.ids_pending) / len(task_log)) * 100
+            mission_progress = (1 - len(tasklog.ids_pending) / len(tasklog)) * 100
 
         self.ui.progressBar_mission_progress.setValue(mission_progress)
 
@@ -547,13 +547,13 @@ class gcs_mission_interface:
         Update the task overview widgets
         """
 
-        task_log = self.task_log.clone()  # > Clone to avoid concurrent access
+        tasklog = self.tasklog.clone()  # > Clone to avoid concurrent access
 
         # ---- Update mission state overview
         self.__update_mission_state_overview()
 
         # ---- Update task view OVERVIEW
-        for task in task_log:
+        for task in tasklog:
             if "overview_widget" not in task.local:
                 self.__create_task(task)
             else:
@@ -561,7 +561,7 @@ class gcs_mission_interface:
 
         # ---- Update task log MAIN VIEW Rendered
         # -> Update base widgets
-        # for task in self.task_log:
+        # for task in self.tasklog:
         #     if "base_widget" in task.local:
         #         task.local["base_widget"].refresh()
         #     else:
@@ -569,13 +569,13 @@ class gcs_mission_interface:
 
         # ---- Update task log MAIN VIEW Raw
         # -> Sort the task log
-        task_log.sort(key=lambda task: task.creation_timestamp, reverse=True)
+        tasklog.sort(key=lambda task: task.creation_timestamp, reverse=True)
 
         # -> Construct table to display
         task_ids = []
         task_data = []
 
-        for task in task_log:
+        for task in tasklog:
             task_ids.append(task.id)
 
             # -> Convert timestamp to human readable format
@@ -654,7 +654,7 @@ class gcs_mission_interface:
         task_ids = []
         task_data = []
 
-        for task in task_log:
+        for task in tasklog:
             task_ids.append(task.id)
 
             # -> Convert timestamp to human readable format
@@ -740,7 +740,7 @@ class gcs_mission_interface:
         Select a task from the task overview table
         """
 
-        task_log = self.task_log.clone()  # > Clone to avoid concurrent access
+        tasklog = self.tasklog.clone()  # > Clone to avoid concurrent access
 
         # -> Get selected task id
         if source == self.ui.tableWidget_task_log_overview:
@@ -761,7 +761,7 @@ class gcs_mission_interface:
 
         # -> Get the task overview widget
         if "overview_widget" not in self.interface_widgets["tasks"][selected_task_id].keys():
-            self.__create_task(task_log[selected_task_id])
+            self.__create_task(tasklog[selected_task_id])
 
         widget = self.interface_widgets["tasks"][selected_task_id]["overview_widget"]
 

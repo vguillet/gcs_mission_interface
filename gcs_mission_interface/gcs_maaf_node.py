@@ -135,18 +135,18 @@ class MAAFNode(MAAFAgent):
 
         # # --- Task log
         # # > Task log add item
-        # self.task_log.add_on_add_item_listener(
-        #     lambda task: self.emit_update_signal(topic=["task_log", "add_item"], data=task)
+        # self.tasklog.add_on_add_item_listener(
+        #     lambda task: self.emit_update_signal(topic=["tasklog", "add_item"], data=task)
         # )
         #
         # # > Task log remove item
-        # self.task_log.add_on_remove_item_listener(
-        #     lambda task: self.emit_update_signal(topic=["task_log", "remove_item"], data=task)
+        # self.tasklog.add_on_remove_item_listener(
+        #     lambda task: self.emit_update_signal(topic=["tasklog", "remove_item"], data=task)
         # )
         #
         # # > Task log status change
-        # self.task_log.add_on_status_change_listener(
-        #     lambda task: self.emit_update_signal(topic=["task_log", "status_change"], data=task)
+        # self.tasklog.add_on_status_change_listener(
+        #     lambda task: self.emit_update_signal(topic=["tasklog", "status_change"], data=task)
         # )
 
         self.get_logger().info(f"MAAFNode ({node_id}) initialised")
@@ -202,7 +202,7 @@ class MAAFNode(MAAFAgent):
     # >>>> Base
     def task_msg_subscriber_callback(self, task_msg):
         """
-        Callback for task messages: create new task, add to local tasks and update local states
+        Callback for task messages: create new task, add to local tasks and update local states, and select new task
 
         :param task_msg: TaskMsgStamped message
         """
@@ -214,31 +214,63 @@ class MAAFNode(MAAFAgent):
         if msg_target != self.id and msg_target != "all":
             return
 
+        # -> Unpack msg
+        task_dict = loads(task_msg.memo)
+
+        # -> Ensure id is a string
+        task_dict["id"] = str(task_dict["id"])
+
+        # -> Create task object
+        task = Task.from_dict(task_dict, partial=True)
+
         # -> Create new task
-        if task_msg.meta_action == "add":
-            # -> Unpack msg
-            task_dict = loads(task_msg.memo)  # Task from task factory
+        if task_msg.meta_action == "pending":
+            # -> Pass if task is already in the task log
+            if task.id in self.tasklog.ids:
+                return
 
-            # -> Ensure id is a string
-            task_dict["id"] = str(task_dict["id"])
+        #     # TODO: Remove this line once task creation handles stamp creation
+        #     task.creation_timestamp = self.current_timestamp
+        #
+        # elif task_msg.meta_action == "completed":
+        #     task.termination_timestamp = self.current_timestamp
+        #     # TODO: Finish implementing task completion
+        #
+        # elif task_msg.meta_action == "cancelled":
+        #     task.termination_timestamp = self.current_timestamp
+        #     # TODO: Implement task cancel
+        #     pass
 
-            # TODO: Remove this line once task creation handles stamp creation
-            task_dict["creation_timestamp"] = self.current_timestamp
+        # -> Update situation awareness
+        tasklog = TaskLog()
+        tasklog.add_task(task=task)
 
-            # -> Create task object
-            task = Task.from_dict(task_dict)
+        task_state_change, fleet_state_change = self.__update_situation_awareness(tasklog=tasklog, fleet=None)
 
-            # -> Update state awareness
-            tasklog = TaskLog()
-            tasklog.add_task(task=task)
-
-            self.__update_situation_awareness(tasklog=tasklog, fleet=None)
+        # -> Select task
+        self.update_allocation(
+            reset_assignment=task_state_change and self.scenario.recompute_bids_on_state_change)  # TODO: Cleanup
 
         # -> Update previous state hash
         self.prev_allocation_state_hash_dict = deepcopy(self.allocation_state_hash_dict)
 
-        # -> Publish allocation state to the fleet to share the new task
+        # > Publish goal msg
+        self.publish_goal_msg(meta_action="update")
+
+        # -> If state has changed, update local states (only publish when necessary)
         self.publish_allocation_state_msg()
+
+        if task_msg.meta_action == "pending":
+            self.get_logger().info(
+                f"{self.id} * Found new task: {task.id} (Type: {task.type}) - Pending task count: {len(self.tasklog.ids_pending)}")
+
+        elif task_msg.meta_action == "completed":
+            self.get_logger().info(
+                f"{self.id} v Task {task.id} completed - Pending task count: {len(self.tasklog.ids_pending)}")
+
+        elif task_msg.meta_action == "cancelled":
+            self.get_logger().info(
+                f"{self.id} x Task {task.id} cancelled - Pending task count: {len(self.tasklog.ids_pending)}")
 
     def team_msg_subscriber_callback(self, team_msg):
         """
@@ -264,8 +296,8 @@ class MAAFNode(MAAFAgent):
         received_allocation_state = self.deserialise(state=team_msg.memo)
 
         # -> Update local situation awareness
-        # > Convert received serialised task_log to task_log
-        received_task_log = TaskLog.from_dict(received_allocation_state["task_log"])
+        # > Convert received serialised tasklog to tasklog
+        received_task_log = TaskLog.from_dict(received_allocation_state["tasklog"])
 
         # > Convert received serialised fleet to fleet
         received_fleet = Fleet.from_dict(received_allocation_state["fleet"])
@@ -315,7 +347,7 @@ class MAAFNode(MAAFAgent):
             "target": team_msg.target,
             "meta_action": team_msg.meta_action,
             "memo": {
-                "task_log": received_task_log,
+                "tasklog": received_task_log,
                 "fleet": received_fleet,
                 "allocation_state": received_allocation_state
             }
@@ -359,7 +391,7 @@ class MAAFNode(MAAFAgent):
             state.pop("winning_bids_y")
 
             for matrix in state.values():
-                matrix[agent.id] = pd.Series(np.zeros(self.Task_count_N_t), index=self.task_log.ids_pending)
+                matrix[agent.id] = pd.Series(np.zeros(self.Task_count_N_t), index=self.tasklog.ids_pending)
 
         def remove_agent(agent: Agent) -> None:
             """
@@ -367,7 +399,7 @@ class MAAFNode(MAAFAgent):
             """
 
             # TODO: Figure out how to deal with removing bids from the winning bid matrix (full reset vs bid owner tracking). For now, reset winning bids matrix (full reset)
-            self.winning_bids_y = pd.Series(np.zeros(self.Task_count_N_t), index=self.task_log.ids_pending)
+            self.winning_bids_y = pd.Series(np.zeros(self.Task_count_N_t), index=self.tasklog.ids_pending)
 
             # -> Remove agent from all allocation lists and matrices
             state = self.get_state(
@@ -423,18 +455,18 @@ class MAAFNode(MAAFAgent):
                     pass
 
         # ---- Merge received fleet into local one
-        fleet_state_change = self.fleet.merge_fleets(
+        fleet_state_change = self.fleet.merge(
             fleet=fleet,
             add_agent_callback=add_agent,
             remove_agent_callback=remove_agent
         )
 
         # ---- Merge received task list into local one
-        task_state_change = self.task_log.merge_tasklogs(
+        task_state_change = self.tasklog.merge(
             tasklog=tasklog,
             add_task_callback=add_task,
             terminate_task_callback=terminate_task,
-            task_state_change_callback=None
+            tasklog_state_change_callback=None
         )
 
         return task_state_change, fleet_state_change
@@ -529,7 +561,7 @@ class MAAFNode(MAAFAgent):
         print(f">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> Agent {self.id} state:")
         if situation_awareness:
             print("----- Situation awareness")
-            pprint(self.task_log.asdict())
+            pprint(self.tasklog.asdict())
             pprint(self.fleet.asdict())
 
         if local_allocation_state:

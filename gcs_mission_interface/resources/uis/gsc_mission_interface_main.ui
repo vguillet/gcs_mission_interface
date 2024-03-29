@@ -288,7 +288,7 @@
         <item>
          <layout class="QHBoxLayout" name="horizontalLayout_6">
           <item>
-           <widget class="QListWidget" name="task_log"/>
+           <widget class="QListWidget" name="tasklog"/>
           </item>
           <item>
            <widget class="QTabWidget" name="tabWidget">

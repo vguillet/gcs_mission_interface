@@ -153,7 +153,7 @@ class GraphEnvView(QWidget):
 
     def update_plot(self):
         # ----- Verify all tasks and agents have "artists" local key
-        for task in self.nucleus.task_log:
+        for task in self.nucleus.tasklog:
             if "artists" not in task.local.keys():
                 task.local["artists"] = {}
 
@@ -162,7 +162,7 @@ class GraphEnvView(QWidget):
                 agent.local["artists"] = {}
 
         # ----- Remove all unnecessary artists
-        for task in self.nucleus.task_log.tasks_terminated:
+        for task in self.nucleus.tasklog.tasks_terminated:
             # -> Check if any artist exists
             if task.local["artists"]:
                 for artist in task.local["artists"].values():
@@ -173,7 +173,7 @@ class GraphEnvView(QWidget):
                 task.local["artists"] = {}
 
         # ----- Plot Tasks
-        for task in self.nucleus.task_log.tasks_pending:
+        for task in self.nucleus.tasklog.tasks_pending:
             task_x, task_y = task.instructions["x"], task.instructions["y"]
 
             if "text" not in task.local["artists"].keys():
@@ -247,7 +247,7 @@ class GraphEnvView(QWidget):
     #     start = time.time()
     #
     #     # ----- Verify all tasks and agents have "artists" local key
-    #     for task in self.nucleus.task_log:
+    #     for task in self.nucleus.tasklog:
     #         if "artists" not in task.local.keys():
     #             task.local["artists"] = {}
     #
@@ -256,7 +256,7 @@ class GraphEnvView(QWidget):
     #             agent.local["artists"] = {}
     #
     #     # ----- Remove all unnecessary artists
-    #     for task in self.nucleus.task_log.tasks_terminated:
+    #     for task in self.nucleus.tasklog.tasks_terminated:
     #         # -> Check if any artist exists
     #         if task.local["artists"]:
     #             for artist in task.local["artists"].values():
@@ -268,7 +268,7 @@ class GraphEnvView(QWidget):
     #     removed_artist_time = time.time()
     #
     #     # ----- Plot Tasks
-    #     for task in self.nucleus.task_log.tasks_pending:
+    #     for task in self.nucleus.tasklog.tasks_pending:
     #         # > Get task position
     #         task_x, task_y = task.instructions["x"], task.instructions["y"]
     #

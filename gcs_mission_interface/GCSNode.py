@@ -70,7 +70,7 @@ class GCSNode(Node):
         # > Create shallow copy to avoid concurrent access
         # self.env = copy(self.nucleus.env)
         self.fleet = copy(self.nucleus.fleet)
-        self.task_log = copy(self.nucleus.task_log)
+        self.tasklog = copy(self.nucleus.tasklog)
 
         # -> Create subscriber to update
         qos = QoSProfile(
@@ -117,7 +117,7 @@ class GCSNode(Node):
 
         # -> Convert update to fleet and task log objects
         state["fleet"] = Fleet.from_dict(state["fleet"])
-        state["task_log"] = TaskLog.from_dict(state["task_log"])
+        state["tasklog"] = TaskLog.from_dict(state["tasklog"])
 
         t1 = time.time()
 
@@ -126,7 +126,7 @@ class GCSNode(Node):
                 agent.shared["allocation_state"] = loads(agent.shared["allocation_state"])
 
                 for key in agent.shared["allocation_state"].keys():
-                    if key == "task_log":
+                    if key == "tasklog":
                         continue
                         agent.shared["allocation_state"][key] = TaskLog.from_dict(agent.shared["allocation_state"][key])
                     elif key == "fleet":
@@ -138,11 +138,11 @@ class GCSNode(Node):
         t2 = time.time()
 
         # fleet = self.fleet.clone()
-        # task_log = self.task_log.clone()
+        # tasklog = self.tasklog.clone()
 
         # -> Merge updates in local state
         self.fleet.merge(state["fleet"], prioritise_local=False)
-        self.task_log.merge(state["task_log"], prioritise_local=False)
+        self.tasklog.merge(state["tasklog"], prioritise_local=False)
 
         t3 = time.time()
 
@@ -157,8 +157,8 @@ class GCSNode(Node):
         # elif "fleet" in topics:
         #     data = fleet[data["id"]]
         #
-        # elif "task_log" in topics:
-        #     data = task_log[data["id"]]
+        # elif "tasklog" in topics:
+        #     data = tasklog[data["id"]]
         #
         format_time = time.time()
         #

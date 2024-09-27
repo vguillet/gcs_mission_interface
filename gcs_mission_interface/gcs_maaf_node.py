@@ -6,8 +6,7 @@
 
 import sys
 import os
-import time
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Tuple
 from json import loads, dumps
 from copy import deepcopy
 from datetime import datetime
@@ -22,7 +21,6 @@ import sys
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel
 from PySide6.QtGui import QIcon
-from PySide6.QtCore import Slot, Signal
 
 # ROS2
 import rclpy
@@ -38,8 +36,6 @@ from orchestra_config.sim_config import *
 
 from maaf_allocation_node.maaf_agent import MAAFAgent
 
-from maaf_tools.tools import *
-
 from maaf_tools.datastructures.task.Task import Task
 from maaf_tools.datastructures.task.TaskLog import TaskLog
 
@@ -50,54 +46,52 @@ from maaf_tools.datastructures.agent.Plan import Plan
 
 from maaf_msgs.msg import TeamCommStamped, Bid, Allocation
 
+from .ui_singleton import UiSingleton
+
 ##################################################################################################################
 
 
 class MAAFNode(MAAFAgent):
-    update = Signal(str)
-
-    def __init__(self, node_id: str):
+    def __init__(self):
         # ---- Init parent class
         MAAFAgent.__init__(
             self,
-            node_name=node_id,
-            id=node_id,
+            node_name="gcs_mission_interface",
+            id="gcs_mission_interface",
             name="GCS Mission Interface",
             skillset=["INTERFACE"],
             bid_estimator=None
         )
 
-        # -> Add update publisher
-        qos_update = QoSProfile(
+        # -> Override node fleets_msgs subscriber with one with a best effort qos
+        qos_override = QoSProfile(
             reliability=QoSReliabilityPolicy.BEST_EFFORT,
             durability=QoSDurabilityPolicy.VOLATILE,
             history=QoSHistoryPolicy.KEEP_LAST,
-            depth=1,
+            depth=3
         )
 
-        self.update_pub = self.create_publisher(
-            msg_type=TeamCommStamped,
-            topic="gcs_mission_interface/update",
-            qos_profile=qos_update
-        )
+        if RUN_MODE == OPERATIONAL:
+            # ---------- fleet_msgs
+            self.fleet_msgs_sub = self.create_subscription(
+                msg_type=TeamCommStamped,
+                topic=topic_fleet_msgs,
+                callback=self._team_msg_subscriber_callback,
+                qos_profile=qos_override
+            )
 
-        # -> Add epoch subscriber
-        self.epoch_sub = self.create_subscription(
-            msg_type=TeamCommStamped,
-            topic=topic_epoch,
-            qos_profile=qos_sim_epoch,
-            callback=lambda msg: self.emit_update_signal(topic=["all"], data=msg.memo),
-        )
-
-        # # -> Add update timer
-        # self.update_timer = self.create_timer(
-        #     timer_period=.1,
-        #     callback=lambda: self.emit_update_signal(topic=["all"], data=None)
-        # )
+        elif RUN_MODE == SIM:
+            # ---------- fleet_msgs_filtered
+            self.fleet_msgs_sub = self.create_subscription(
+                msg_type=TeamCommStamped,
+                topic=topic_fleet_msgs_filtered,
+                callback=self._team_msg_subscriber_callback,
+                qos_profile=qos_override
+            )
 
         # -----------------------------------  Agent allocation states
         # -> Setup additional CBAA-specific allocation states
-        self.__setup_allocation_additional_states()
+        self._setup_allocation_additional_states()
 
         # -> Setup team message subscriber callback listeners
         self.__team_msg_subscriber_callback_listeners = []
@@ -105,90 +99,14 @@ class MAAFNode(MAAFAgent):
         # -> Initialise previous state hash
         self.prev_allocation_state_hash_dict = deepcopy(self.allocation_state_hash_dict)
 
-        # -----------------------------------  Setup events and signals
-        # > Fleet msgs
-        # self.add_team_msg_subscriber_callback_listener(
-        #     lambda msg: self.emit_update_signal(topic=["fleet_msgs"], data=None)
-        # )
-
-        # > Env update
-        self.add_on_env_update_listener(
-            lambda env: self.emit_update_signal(
-                topic=["env_update"], data=graph_to_json(graph=env["graph"], pos=env["pos"]))
-        )
-
-        # # --- Fleet
-        # # > Fleet add item
-        # self.fleet.add_on_add_item_listener(
-        #     lambda agent: self.emit_update_signal(topic=["fleet", "add_item"], data=agent)
-        # )
-        #
-        # # > Fleet remove item
-        # self.fleet.add_on_remove_item_listener(
-        #     lambda agent: self.emit_update_signal(topic=["fleet", "remove_item"], data=agent)
-        # )
-        #
-        # # > Fleet state change
-        # self.fleet.add_on_state_change_listener(
-        #     lambda agent: self.emit_update_signal(topic=["fleet", "state_change"], data=agent)
-        # )
-
-        # # --- Task log
-        # # > Task log add item
-        # self.tasklog.add_on_add_item_listener(
-        #     lambda task: self.emit_update_signal(topic=["tasklog", "add_item"], data=task)
-        # )
-        #
-        # # > Task log remove item
-        # self.tasklog.add_on_remove_item_listener(
-        #     lambda task: self.emit_update_signal(topic=["tasklog", "remove_item"], data=task)
-        # )
-        #
-        # # > Task log status change
-        # self.tasklog.add_on_status_change_listener(
-        #     lambda task: self.emit_update_signal(topic=["tasklog", "status_change"], data=task)
-        # )
-
-        self.get_logger().info(f"MAAFNode ({node_id}) initialised")
-
-    # ============================================================== INIT
-    def __setup_allocation_additional_states(self) -> None:
+# ============================================================== INIT
+    def _setup_allocation_additional_states(self) -> None:
         """
         Setup additional method-dependent allocation states for the agents
         """
         pass
 
     # ============================================================== PROPERTIES
-    def emit_update_signal(self, topic: list[str], data):
-        """
-        Emit the update signal with the current state serialised
-        """
-        # -> Serialise state
-        state = self.get_state(
-            env=True,
-            state_awareness=True,
-            local_allocation_state=False,
-            shared_allocation_state=False,
-            serialised=True
-        )
-
-        # -> Serialise data
-        try:
-            data = data.asdict()
-        except:
-            pass
-
-        update = dumps({
-                "timestamp": self.current_timestamp,
-                "topics": topic,
-                "state": state,
-                "data": data
-            })
-
-        self.update_pub.publish(TeamCommStamped(
-            memo=update
-        ))
-
     # ---------------- Self state
     @property
     def local_allocation_state(self) -> dict:
@@ -200,9 +118,9 @@ class MAAFNode(MAAFAgent):
     # ============================================================== METHODS
     # ---------------- Callbacks
     # >>>> Base
-    def task_msg_subscriber_callback(self, task_msg):
+    def _task_msg_subscriber_callback(self, task_msg):
         """
-        Callback for task messages: create new task, add to local tasks and update local states, and select new task
+        Callback for task messages: create new task, add to local tasks and update local states
 
         :param task_msg: TaskMsgStamped message
         """
@@ -214,65 +132,30 @@ class MAAFNode(MAAFAgent):
         if msg_target != self.id and msg_target != "all":
             return
 
-        # -> Unpack msg
-        task_dict = loads(task_msg.memo)
-
-        # -> Ensure id is a string
-        task_dict["id"] = str(task_dict["id"])
-
-        # -> Create task object
-        task = Task.from_dict(task_dict, partial=True)
-
         # -> Create new task
-        if task_msg.meta_action == "pending":
-            # -> Pass if task is already in the task log
-            if task.id in self.tasklog.ids:
-                return
+        if task_msg.meta_action == "add":
+            # -> Unpack msg
+            task_dict = loads(task_msg.memo)  # Task from task factory
 
-        #     # TODO: Remove this line once task creation handles stamp creation
-        #     task.creation_timestamp = self.current_timestamp
-        #
-        # elif task_msg.meta_action == "completed":
-        #     task.termination_timestamp = self.current_timestamp
-        #     # TODO: Finish implementing task completion
-        #
-        # elif task_msg.meta_action == "cancelled":
-        #     task.termination_timestamp = self.current_timestamp
-        #     # TODO: Implement task cancel
-        #     pass
+            # -> Ensure id is a string
+            task_dict["id"] = str(task_dict["id"])
 
-        # -> Update situation awareness
-        tasklog = TaskLog()
-        tasklog.add_task(task=task)
+            # TODO: Remove this line once task creation handles stamp creation
+            task_dict["creation_timestamp"] = self.current_timestamp
 
-        task_state_change, fleet_state_change = self.__update_situation_awareness(tasklog=tasklog, fleet=None)
+            # -> Create task object
+            task = Task.from_dict(task_dict)
 
-        # -> Select task
-        self.update_allocation(
-            reset_assignment=task_state_change and self.scenario.recompute_bids_on_state_change)  # TODO: Cleanup
+            # -> Update state awareness
+            self.update_situation_awareness(task_list=[task], fleet=None)
 
         # -> Update previous state hash
         self.prev_allocation_state_hash_dict = deepcopy(self.allocation_state_hash_dict)
 
-        # > Publish goal msg
-        self.publish_goal_msg(meta_action="update")
+        # -> Publish allocation state to the fleet to share the new task
+        # self.publish_allocation_state_msg()
 
-        # -> If state has changed, update local states (only publish when necessary)
-        self.publish_allocation_state_msg()
-
-        if task_msg.meta_action == "pending":
-            self.get_logger().info(
-                f"{self.id} * Found new task: {task.id} (Type: {task.type}) - Pending task count: {len(self.tasklog.ids_pending)}")
-
-        elif task_msg.meta_action == "completed":
-            self.get_logger().info(
-                f"{self.id} v Task {task.id} completed - Pending task count: {len(self.tasklog.ids_pending)}")
-
-        elif task_msg.meta_action == "cancelled":
-            self.get_logger().info(
-                f"{self.id} x Task {task.id} cancelled - Pending task count: {len(self.tasklog.ids_pending)}")
-
-    def team_msg_subscriber_callback(self, team_msg):
+    def _team_msg_subscriber_callback(self, team_msg):
         """
         Callback for team messages: consensus phase of the CBAA algorithm
 
@@ -297,29 +180,26 @@ class MAAFNode(MAAFAgent):
 
         # -> Update local situation awareness
         # > Convert received serialised tasklog to tasklog
-        received_task_log = TaskLog.from_dict(received_allocation_state["tasklog"])
+        received_tasklog = TaskLog.from_dict(received_allocation_state["tasklog"])
 
         # > Convert received serialised fleet to fleet
         received_fleet = Fleet.from_dict(received_allocation_state["fleet"])
 
-        self.__update_situation_awareness(
-            tasklog=received_task_log,
-            fleet=received_fleet
+        self.update_situation_awareness(
+            tasklog=received_tasklog,
+            fleet=received_fleet,
         )
 
         # > Find source agent in received fleet
         source_agent = [agent for agent in received_fleet if agent.id == team_msg.source][0]
 
-        # > Update local allocation state
-        if source_agent.state.timestamp >= self.fleet[source_agent.id].state.timestamp:
-            self.fleet.update_item_fields(
-                item=source_agent,
-                field_value_pair={"allocation_state": team_msg.memo},
-                add_to_shared=True
-            )
+        self.__log_received_allocation_states(
+            agent=source_agent,
+            received_allocation_state=received_allocation_state,
+        )
 
         # -> Update shared states
-        self.__update_shared_states(
+        self.update_shared_states(
             received_shared_bids_b=received_allocation_state["shared_bids_b"],
             received_shared_bids_priority_beta=received_allocation_state["shared_bids_priority_beta"],
             received_shared_allocations_a=received_allocation_state["shared_allocations_a"],
@@ -327,13 +207,12 @@ class MAAFNode(MAAFAgent):
         )
 
         # -> If state has changed, update local states (only publish when necessary)
-        if self.allocation_state_change:
-            self.check_publish_state_change()
-
-        else:
-            pass
-            # -> Check if the agent should rebroadcast the message
-            # msg, rebroadcast = self.rebroadcast(msg=team_msg, publisher=self.fleet_msgs_pub)
+        # if self.allocation_state_change:
+        #     self.check_publish_state_change()
+        #
+        # else:
+        #     # -> Check if the agent should rebroadcast the message
+        #     msg, rebroadcast = self.rebroadcast(msg=team_msg, publisher=self.fleet_msgs_pub)
 
         # -> Call listeners
         # > Convert ros time stamp to human readable format
@@ -347,7 +226,7 @@ class MAAFNode(MAAFAgent):
             "target": team_msg.target,
             "meta_action": team_msg.meta_action,
             "memo": {
-                "tasklog": received_task_log,
+                "tasks": received_tasklog,
                 "fleet": received_fleet,
                 "allocation_state": received_allocation_state
             }
@@ -359,10 +238,10 @@ class MAAFNode(MAAFAgent):
         self.__team_msg_subscriber_callback_listeners.append(listener)
 
     # >>>> GCS mission interface
-    def __update_situation_awareness(self,
-                                    tasklog: Optional[List[Task]],
-                                    fleet: Optional[List[Agent]]
-                                    ) -> Tuple[bool, bool]:
+    def update_situation_awareness(self,
+                                   tasklog: Optional[TaskLog],
+                                   fleet: Optional[Fleet]
+                                   ) -> Tuple[bool, bool]:
         """
         Update local states with new tasks and fleet dicts. Add new tasks and agents to local states and extend
         local states with new rows and columns for new tasks and agents. Remove tasks and agents from local states if
@@ -466,12 +345,13 @@ class MAAFNode(MAAFAgent):
             tasklog=tasklog,
             add_task_callback=add_task,
             terminate_task_callback=terminate_task,
-            tasklog_state_change_callback=None
+            tasklog_state_change_callback=None,
+            prioritise_local=False,
         )
 
         return task_state_change, fleet_state_change
 
-    def __update_shared_states(
+    def update_shared_states(
             self,
             received_shared_bids_b,
             received_shared_bids_priority_beta,
@@ -539,6 +419,29 @@ class MAAFNode(MAAFAgent):
                 # > Update local states
                 self.shared_allocations_a.loc[task_id, agent_id] = shared_allocations_a_ij_updated
                 self.shared_allocations_priority_alpha.loc[task_id, agent_id] = shared_allocations_priority_alpha_ij_updated
+
+    def __log_received_allocation_states(
+            self,
+            agent,
+            received_allocation_state: dict,
+        ) -> None:
+        """
+        Log the received allocation states to the agent's local field
+        """
+
+        if agent.state.timestamp >= self.fleet[agent.id].state.timestamp:
+            # -> Sort dataframe columns and index
+            for allocation_state in received_allocation_state.values():
+                if isinstance(allocation_state, pd.DataFrame):
+                    allocation_state.sort_index(axis=0, inplace=True)
+                    allocation_state.sort_index(axis=1, inplace=True)
+
+            # -> Update local data fields
+            self.fleet.update_item_fields(
+                item=agent,
+                field_value_pair={"allocation_state": received_allocation_state},
+                add_to_local=True
+            )
 
     # ---------------- tools
     # >>>> gcs mission interface

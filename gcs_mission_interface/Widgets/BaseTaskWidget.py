@@ -13,21 +13,18 @@ from PySide6.QtGui import QColor, QPainter, QBrush
 
 # Own modules
 from ..ui_loader import uic
-from ..ui_singleton import NucleusSingleton
 
 ##################################################################################################################
 
 
 class BaseTaskWidget(QWidget):
-    def __init__(self, task):
+    def __init__(self, task, ros_node):
         super().__init__()
 
         self.task = task
+        self.ros_node = ros_node
 
         # ----------------------------------- Load GUI
-        # -> Load main singleton
-        self.nucleus = NucleusSingleton()
-
         # -> Load ui singleton
         self.ui = uic.loadUi(os.getcwd() + "/src/gcs_mission_interface/gcs_mission_interface/resources/uis/BaseTaskWidget.ui")
 

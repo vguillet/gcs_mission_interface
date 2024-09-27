@@ -5,16 +5,13 @@
 """
 
 import os
-import random
 import sys
-import time
 from typing import List, Optional
 from json import loads, dumps
+from copy import deepcopy
 from functools import partial
 from threading import Thread
 from pprint import pprint, pformat
-from random import randint
-from copy import copy, deepcopy
 
 # Libs
 import numpy as np
@@ -24,15 +21,13 @@ from PySide6.QtCore import *
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtWidgets import QApplication, QMainWindow, QLabel
 from PySide6.QtGui import QIcon
-from json import loads, dumps
 
 # ROS2
 import rclpy
-from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.node import Node
 from geometry_msgs.msg import Twist, PoseStamped, Point
 from sensor_msgs.msg import JointState, LaserScan
-from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
+from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 # Local Imports
 from orchestra_config.orchestra_config import *     # KEEP THIS LINE, DO NOT REMOVE
@@ -46,56 +41,33 @@ from maaf_tools.datastructures.agent.AgentState import AgentState
 from maaf_tools.datastructures.agent.Plan import Plan
 
 from maaf_tools.tools import *
-from maaf_tools.Event_bus import EventBus
-
-from maaf_msgs.msg import TeamCommStamped, Bid, Allocation
 
 from .gcs_maaf_node import MAAFNode
-from .GCSNode import GCSNode
-from .ui_singleton import UiSingleton, NucleusSingleton
+from .ui_singleton import UiSingleton
 
 from .Widgets.AgentOverviewWidget import AgentOverviewWidget
 from .Widgets.TaskOverviewWidget import TaskOverviewWidget
 from .Widgets.BaseTaskWidget import BaseTaskWidget
 from .Widgets.GraphEnvView import GraphEnvView
 
-
 ##################################################################################################################
 
 
 class gcs_mission_interface:
-    def __init__(self, interface_id: str):
+    def __init__(self):
         # ----------------------------------- Load GUI
         app = QtWidgets.QApplication(sys.argv)
 
         # -> Load ui singleton
-        self.ui = UiSingleton().ui
+        self.ui = UiSingleton().interface
 
         root_path = str(os.getcwd())
         self.ui.setWindowIcon(QIcon(root_path + "/ros2_ws/src/gcs_mission_interface/gcs_mission_interface/resources/gcs_mission_interface_logo.jpeg"))
         self.ui.setWindowTitle("GCS Mission Interface")
 
-        self.interface_widgets = {
-            "agents": {},
-            "tasks": {}
-        }
-
-        self.eventbus = EventBus()
-        self.nucleus = NucleusSingleton()
-
-        # > Create shallow copy to avoid concurrent access
-        # self.env = copy(self.nucleus.env)
-        self.fleet = copy(self.nucleus.fleet)
-        self.tasklog = copy(self.nucleus.tasklog)
-
-        # ----------------------------------- Add all update methods reference to the nucleus
-        # self.nucleus.update_all = self.__update_all
-        # self.nucleus.update_env_view = self.__update_env_view
-        # self.nucleus.update_agents = self.__update_agents
-        # self.nucleus.update_tasks = self.__update_tasks
-
         # ----------------------------------- Create Node
-        self.nucleus.id = interface_id
+        # ---- Init parent class
+        self.ros_node = MAAFNode()
 
         # -> Extend the ui singleton
         self.selected_agent_id = None
@@ -106,32 +78,27 @@ class gcs_mission_interface:
 
         self.ui.env_widget = None
 
-        # ---- Init ros node
-        # -> Init the gui event bus connections to the ros2 node
-        self.init_event_bus_connections()
+        # -> Add environment widget update listener to environment update listeners
+        self.ros_node.add_on_env_update_listener(self.__update_env_view)
 
-        # self.ros_node = GCSNode(interface_id=interface_id)
-        # self.single_threaded_executor = SingleThreadedExecutor()
-        # self.single_threaded_executor.add_node(self.ros_node)
-        #
-        # # -> QT timer based spin
-        # self.spin_timer = QtCore.QTimer()
-        # self.spin_timer.timeout.connect(self.__node_spinner)
-        # self.spin_timer.setInterval(1)
-        # self.spin_timer.start(0.1)
+        # ---- Connect listeners
+        # - Fleet listeners
+        self.ros_node.fleet.add_on_add_item_listener(self.__create_agent)
+        self.ros_node.fleet.add_on_edit_list_listener(self.__update_agents)
+        self.ros_node.fleet.add_on_state_change_listener(self.__update_env_view)
 
-        self.ros_thread = ROS_Thread(ros_node=GCSNode(interface_id=interface_id))
-        self.ros_thread.start()
+        # - Task log listeners
+        self.ros_node.tasklog.add_on_add_item_listener(self.__create_task)
+        self.ros_node.tasklog.add_on_edit_list_listener(self.__update_tasks)
+        self.ros_node.tasklog.add_on_status_change_listener(self.__update_env_view)
 
-        # -> QT timer based refresh
-        self.plot_timer = QtCore.QTimer()
-        self.plot_timer.timeout.connect(self.__update_all)
-        # self.plot_timer.setInterval(16.666666666666668)  # 60 Hz
-        self.plot_timer.setInterval(32)  # 30 Hz
-        # self.plot_timer.setInterval(128)  # 30 Hz
-        self.plot_timer.start()
+        # -> QT timer based spin
+        self.spin_timer = QtCore.QTimer()
+        self.spin_timer.timeout.connect(self.__node_spinner)
+        self.spin_timer.setInterval(10)
+        self.spin_timer.start()
 
-        # ---- Connect local signals
+        # ---- Connect signals
         self.ui.pushButton_reset_local_allocation_node.clicked.connect(self.__reset_local_allocation_node)
         self.ui.pushButton_task_overview_view_switcher.clicked.connect(self.__switch_task_overview_view_mode)
 
@@ -150,87 +117,20 @@ class gcs_mission_interface:
         self.ui.tableWidget_tasks_select.itemSelectionChanged.connect(
             partial(self.__select_task, source=self.ui.tableWidget_tasks_select)
         )   # SIDE VIEW
-        self.ui.tableWidget_task_log_overview.itemSelectionChanged.connect(
-            partial(self.__select_task, source=self.ui.tableWidget_task_log_overview)
+        self.ui.tableWidget_tasklog_overview.itemSelectionChanged.connect(
+            partial(self.__select_task, source=self.ui.tableWidget_tasklog_overview)
         )   # MAIN VIEW
-
-        # self.ros_node.get_logger().info(f"GCS Mission Interface ({interface_id}) initialized")
 
         # ----------------------------------- Final setup
         # -> Display windows
         self.ui.show()
 
         # ----------------------------------- Terminate ROS2 node on exit
-
+        # self.ros_node.destroy_node()
         sys.exit(app.exec())
-        self.ros_node.destroy_node()
-
-    def init_event_bus_connections(self):
-        # -> Add env widget update listener to env update listeners
-        self.eventbus.subscribe(
-            topic=["ros_node", "env_update"],
-            callbacks=self.__update_env_view,
-            subscriber_id="env_update"
-        )
-
-        # ---- Connect listeners
-        # - Fleet listeners
-        # > Fleet add item
-        self.eventbus.subscribe(
-            topic=["ros_node", "fleet", "add_item"],
-            callbacks=self.__create_agent,
-            subscriber_id="add_agent"
-        )
-
-        # > Fleet remove item
-        self.eventbus.subscribe(
-            topic=["ros_node", "fleet", "remove_item"],
-            callbacks=self.__update_agents,     # TODO: Fix once remove agent is implemented
-            subscriber_id="remove_agent"
-        )
-
-        # > Fleet state change
-        self.eventbus.subscribe(
-            topic=["ros_node", "fleet", "state_change"],
-            callbacks=[
-                self.__update_agents,
-                # self.__update_env_view
-            ],
-            subscriber_id="agent_state_change"
-        )
-
-        # - Task log listeners
-        # > Task log add item
-        self.eventbus.subscribe(
-            topic=["ros_node", "tasklog", "add_item"],
-            callbacks=self.__create_task,
-            subscriber_id="add_task"
-        )
-
-        # > Task log remove item
-        self.eventbus.subscribe(
-            topic=["ros_node", "tasklog", "remove_item"],
-            callbacks=self.__update_tasks,      # TODO: Fix once remove task is implemented
-            subscriber_id="remove_task"
-        )
-
-        # > Task log status change
-        self.eventbus.subscribe(
-            topic=["ros_node", "tasklog", "status_change"],
-            callbacks=[
-                self.__update_tasks,
-                # self.__update_env_view
-            ],
-            subscriber_id="task_status_change"
-        )
-
-        print("Event bus connections initialized")
-        pprint(self.eventbus.tree, width=1, indent=1, compact=True, depth=2)
 
     # ============================================================== METHODS
     def __reset_local_allocation_node(self, *args, **kwargs):
-        return
-
         # -> Reset allocation states
         self.ros_node.reset_allocation_states()
 
@@ -254,64 +154,47 @@ class gcs_mission_interface:
         """
         Create all the widgets and subscribers for the agent
         """
-
         # ----- Overview widget
         # -> Create widget
-        widget = AgentOverviewWidget(agent_id=agent.id)
+        widget = AgentOverviewWidget(agent_id=agent.id, ros_node=self.ros_node)
 
-        # -> Add to the interface widgets
-        if agent.id not in self.interface_widgets["agents"].keys():
-            self.interface_widgets["agents"][agent.id] = {
-                "overview_widget": widget
-            }
-        else:
-            self.interface_widgets["agents"][agent.id]["overview_widget"] = widget
+        # -> Add to the agent local
+        agent.local["overview_widget"] = widget
 
         # -> Add to the stacked widget
         self.ui.stackedWidget_agents_overviews.addWidget(widget)
 
         # -> Connect widget listeners
-        self.eventbus.subscribe(
-            topic=["ros_node", "team_msg"],
-            callbacks=[
-                widget.update,
-                # widget.add_to_logs
-            ],
-            subscriber_id=f"agent_{agent.id}_update"
-        )
+        self.ros_node.add_team_msg_subscriber_callback_listener(widget.update)
+        self.ros_node.add_team_msg_subscriber_callback_listener(widget.add_to_logs)
 
         # ----- Pose subscriber
         # -> Create subscriber
-        # pose_subscriber = self.ros_node.create_subscription(
-        #     msg_type=PoseStamped,
-        #     topic=f"/{agent.id}{topic_pose}",
-        #     callback=partial(self.pose_subscriber_callback, agent=agent),
-        #     qos_profile=qos_pose
-        # )
-        #
-        # # -> Add to the agent local
-        # agent.local["pose_subscriber"] = pose_subscriber
+        pose_subscriber = self.ros_node.create_subscription(
+            msg_type=PoseStamped,
+            topic=f"/{agent.id}{topic_pose}",
+            callback=partial(self.pose_subscriber_callback, agent=agent),
+            qos_profile=qos_pose
+        )
+
+        # -> Add to the agent local
+        agent.local["pose_subscriber"] = pose_subscriber
 
     def __create_task(self, task: Task, *args, **kwargs) -> None:
         # -> Create overview widget
-        overview_widget = TaskOverviewWidget(task=task)
+        overview_widget = TaskOverviewWidget(task=task, ros_node=self.ros_node)
 
-        # -> Add to the interface widgets
-        if task.id not in self.interface_widgets["tasks"].keys():
-            self.interface_widgets["tasks"][task.id] = {
-                "overview_widget": overview_widget
-            }
-        else:
-            self.interface_widgets["tasks"][task.id]["overview_widget"] = overview_widget
+        # > Add to the task local
+        task.local["overview_widget"] = overview_widget
 
         # > Add to the stacked widget
         self.ui.stackedWidget_tasks_overviews.addWidget(overview_widget)
 
         # -> Create base widget
-        base_widget = BaseTaskWidget(task=task)
+        base_widget = BaseTaskWidget(task=task, ros_node=self.ros_node)
 
         # > Add to the task local
-        self.interface_widgets["tasks"][task.id]["base_widget"] = base_widget
+        task.local["base_widget"] = base_widget
 
         # -> Add widget to layout
         self.ui.verticalLayout_tasks_overview_base_widgets.addWidget(base_widget)
@@ -341,114 +224,80 @@ class gcs_mission_interface:
             # -> Update button text
             self.ui.pushButton_task_overview_view_switcher.setText("Switch to Rendered View")
 
-    def __update_all(self, *args, **kwargs) -> None:
-        # return
-        self.__update_agents(agent=None)
-        self.__update_tasks(task=None)
-        self.__update_env_view(env=None)
-
-    def __update_env_view(self, env, *args, **kwargs) -> None:
+    def __update_env_view(self, *args, **kwargs) -> None:
         """
         Update the interface
         """
 
-        if env is not None:
-            self.nucleus.env = env
-
-        elif not self.nucleus.env:
-            return
-
-        env = copy(self.nucleus.env)
-
         # -> If no environment widget exists, create one
         if self.ui.env_widget is None:
-            if env["env_type"] == "graph":
-                self.ui.env_widget = GraphEnvView()
+            if self.ros_node.environment["env_type"] == "graph":
+                self.ui.env_widget = GraphEnvView(agent_id=self.ros_node.agent.id, ros_node=self.ros_node)
                 self.ui.verticalLayout_env_view.addWidget(self.ui.env_widget)
-                self.ui.env_widget.update_env()
 
-            else:
-                # TODO: Add support for more environment types
-                raise NotImplementedError("Environment type not supported")
+            # TODO: Add support for more environment types
 
-            # # -> Add env widget update listener to env update listeners
-            # self.eventbus.subscribe(
-            #     topic=["ros_node", "env_update"],
-            #     callbacks=self.ui.env_widget.update_plot,
-            #     subscriber_id="gui_env_update"
-            # )
+            # -> Add environment widget update listener to environment update listeners
+            self.ros_node.add_on_env_update_listener(self.ui.env_widget.update)
 
         # -> If the wrong environment widget exists, remove it and create the correct one
-        elif env["env_type"] != self.ui.env_widget.env_type:
+        elif self.ros_node.environment["env_type"] != self.ui.env_widget.env_type:
             self.ui.verticalLayout_env_view.removeWidget(self.ui.env_widget)
             self.ui.env_widget = None
-            self.__update_env_view(env=env["env_type"])
+            self.__update_env_view()
 
         else:
-            self.ui.env_widget.update_plot()
+            self.ui.env_widget.update()
 
     def __update_mission_state_overview(self, *args, **kwargs) -> None:
         """
         Update the mission state overview widgets
         """
 
-        # -> Clone the fleet and task log to avoid concurrent access
-        fleet = self.fleet.clone()
-        tasklog = self.tasklog.clone()
-
         # ---- Fleet
-        self.ui.lcdNumber_agent_count_total.display(len(fleet))
-        self.ui.lcdNumber_agents_count_active.display(len(fleet.ids_active))
-        self.ui.lcdNumber_agents_count_inactive.display(len(fleet.ids_inactive))
+        self.ui.lcdNumber_agent_count_total.display(len(self.ros_node.fleet))
+        self.ui.lcdNumber_agents_count_active.display(len(self.ros_node.fleet.ids_active))
+        self.ui.lcdNumber_agents_count_inactive.display(len(self.ros_node.fleet.ids_inactive))
 
         # TODO: Implement agents free/busy
 
         # ---- Comms. state
         # TODO: Implement comms. state tracking
-        self.ui.lcdNumber_agent_count_total_2.display(len(fleet))
+        self.ui.lcdNumber_agent_count_total_2.display(len(self.ros_node.fleet))
 
         # ---- Tasks
-        self.ui.lcdNumber_tasks_count_total.display(len(tasklog))
-        self.ui.lcdNumber_tasks_count_pending.display(len(tasklog.ids_pending))
-        self.ui.lcdNumber_tasks_count_completed.display(len(tasklog.ids_completed))
-        self.ui.lcdNumber_tasks_count_canceled.display(len(tasklog.ids_cancelled))
+        self.ui.lcdNumber_tasks_count_total.display(len(self.ros_node.tasklog))
+        self.ui.lcdNumber_tasks_count_pending.display(len(self.ros_node.tasklog.ids_pending))
+        self.ui.lcdNumber_tasks_count_completed.display(len(self.ros_node.tasklog.ids_completed))
+        self.ui.lcdNumber_tasks_count_canceled.display(len(self.ros_node.tasklog.ids_cancelled))
 
         # ---- Mission progress
-        if len(tasklog) == 0:
+        if len(self.ros_node.tasklog) == 0:
             mission_progress = 0
         else:
-            mission_progress = (1 - len(tasklog.ids_pending) / len(tasklog)) * 100
+            mission_progress = (1 - len(self.ros_node.tasklog.ids_pending) / len(self.ros_node.tasklog)) * 100
 
         self.ui.progressBar_mission_progress.setValue(mission_progress)
 
-    def __update_agents(self, agent: Agent, *args, **kwargs) -> None:
+    def __update_agents(self, *args, **kwargs) -> None:
         """
         Update the agent overview widgets
         """
 
-        fleet = self.fleet.clone()   # > Clone to avoid concurrent access
-
         # ---- Update mission state overview
         self.__update_mission_state_overview()
 
-        # ---- Update agent view OVERVIEW
-        for agent in fleet:
-            if "overview_widget" not in agent.local:
-                self.__create_agent(agent)
-            else:
-                self.interface_widgets["agents"][agent.id]["overview_widget"].refresh()
+        # -> Sort the fleet
+        self.ros_node.fleet.sort(key=lambda agent: agent.id)
 
         # ---- Update agent MAIN VIEW
-        # -> Sort the fleet
-        fleet.sort(key=lambda agent: agent.id)
-
         # -> Construct table to display
         agent_ids = []
         agent_data = []
 
-        for agent in fleet:
-            # -> Skip GCS Mission Interfaces
-            if agent.name == "GCS Mission Interface":
+        for agent in self.ros_node.fleet:
+            # -> Skip self
+            if agent is self.ros_node.agent:
                 continue
 
             # -> Convert timestamp to human readable format
@@ -508,9 +357,8 @@ class gcs_mission_interface:
         # -> Construct table to display
         agent_ids = []
         agent_data = []
-        for agent in fleet:
-            # -> Skip GCS Mission Interfaces
-            if agent.name == "GCS Mission Interface":
+        for agent in self.ros_node.fleet:
+            if agent is self.ros_node.agent:
                 continue
 
             agent_ids.append(agent.id)
@@ -542,40 +390,27 @@ class gcs_mission_interface:
             self.ui.tableWidget_agents_select.selectRow(0)
             self.__select_agent(source=self.ui.tableWidget_agents_select)
 
-    def __update_tasks(self, task: Task, *args, **kwargs) -> None:
+    def __update_tasks(self, *args, **kwargs) -> None:
         """
         Update the task overview widgets
         """
 
-        tasklog = self.tasklog.clone()  # > Clone to avoid concurrent access
-
         # ---- Update mission state overview
         self.__update_mission_state_overview()
 
-        # ---- Update task view OVERVIEW
-        for task in tasklog:
-            if "overview_widget" not in task.local:
-                self.__create_task(task)
-            else:
-                self.interface_widgets["tasks"][task.id]["overview_widget"].refresh()
+        self.ros_node.tasklog.sort(key=lambda task: task.creation_timestamp, reverse=True)
 
         # ---- Update task log MAIN VIEW Rendered
         # -> Update base widgets
-        # for task in self.tasklog:
-        #     if "base_widget" in task.local:
-        #         task.local["base_widget"].refresh()
-        #     else:
-        #         self.__create_task(task)
+        for task in self.ros_node.tasklog:
+            task.local["base_widget"].refresh()
 
         # ---- Update task log MAIN VIEW Raw
-        # -> Sort the task log
-        tasklog.sort(key=lambda task: task.creation_timestamp, reverse=True)
-
         # -> Construct table to display
         task_ids = []
         task_data = []
 
-        for task in tasklog:
+        for task in self.ros_node.tasklog:
             task_ids.append(task.id)
 
             # -> Convert timestamp to human readable format
@@ -609,11 +444,11 @@ class gcs_mission_interface:
         # -> If there are no agents, return
         if len(task_data) == 0:
             # -> Clear tables rows
-            self.ui.tableWidget_task_log_overview.clear()
+            self.ui.tableWidget_tasklog_overview.clear()
             self.ui.tableWidget_tasks_select.clear()
 
             # -> Remove all rows
-            self.ui.tableWidget_task_log_overview.setRowCount(0)
+            self.ui.tableWidget_tasklog_overview.setRowCount(0)
             self.ui.tableWidget_tasks_select.setRowCount(0)
 
             return
@@ -631,30 +466,30 @@ class gcs_mission_interface:
             "Termination Source"
         ]
 
-        self.ui.tableWidget_task_log_overview.setColumnCount(len(headers))
-        self.ui.tableWidget_task_log_overview.setHorizontalHeaderLabels(headers)
+        self.ui.tableWidget_tasklog_overview.setColumnCount(len(headers))
+        self.ui.tableWidget_tasklog_overview.setHorizontalHeaderLabels(headers)
 
         # > Set the ids as the row headers
-        self.ui.tableWidget_task_log_overview.setRowCount(len(task_data))
-        self.ui.tableWidget_task_log_overview.setVerticalHeaderLabels([str(id) for id in task_ids])
+        self.ui.tableWidget_tasklog_overview.setRowCount(len(task_data))
+        self.ui.tableWidget_tasklog_overview.setVerticalHeaderLabels([str(id) for id in task_ids])
 
         # > Enable word wrap for the row headers
-        self.ui.tableWidget_task_log_overview.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.ui.tableWidget_tasklog_overview.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
 
         # > Set the data
         for i, row in enumerate(task_data):
             for j, cell in enumerate(row):
-                self.ui.tableWidget_task_log_overview.setItem(i, j, QtWidgets.QTableWidgetItem(str(cell)))
+                self.ui.tableWidget_tasklog_overview.setItem(i, j, QtWidgets.QTableWidgetItem(str(cell)))
 
         # > Resize columns
-        self.ui.tableWidget_task_log_overview.resizeColumnsToContents()
+        self.ui.tableWidget_tasklog_overview.resizeColumnsToContents()
 
         # ---- Update task log SIDE VIEW
         # -> Construct table to display
         task_ids = []
         task_data = []
 
-        for task in tasklog:
+        for task in self.ros_node.tasklog:
             task_ids.append(task.id)
 
             # -> Convert timestamp to human readable format
@@ -695,8 +530,6 @@ class gcs_mission_interface:
         Select an agent from the agent overview table
         """
 
-        fleet = self.fleet.clone()  # > Clone to avoid concurrent access
-
         # -> Get selected agent id
         if source == self.ui.tableWidget_fleet_overview:
             # > Get selected row id
@@ -715,19 +548,15 @@ class gcs_mission_interface:
             self.ui.tableWidget_fleet_overview.selectRow(selected_agent_row)
 
         # -> Get the agent overview widget
-        if "overview_widget" not in self.interface_widgets["agents"][selected_agent_id].keys():
-            self.__create_agent(fleet[selected_agent_id])
+        self.ros_node.get_logger().info(f"Selected agent id: {selected_agent_id}")
+        widget = self.ros_node.fleet[selected_agent_id].local["overview_widget"]
 
-        widget = self.interface_widgets["agents"][selected_agent_id]["overview_widget"]
+        if self.selected_agent_id is not None:
+            # -> Get current agent interface view
+            self.current_agent_interface_view = self.ros_node.fleet[self.selected_agent_id].local["overview_widget"].current_interface_view
 
-        # -> Get current agent interface view
-        if self.selected_agent_id is None:
-            self.selected_agent_id = selected_agent_id
-
-        self.current_agent_interface_view = self.interface_widgets["agents"][self.selected_agent_id]["overview_widget"].current_interface_view
-
-        # -> Set current agent interface view
-        widget.current_interface_view = self.current_agent_interface_view
+            # -> Set current agent interface view
+            widget.current_interface_view = self.current_agent_interface_view
 
         # -> Switch stacked widget to the agent overview
         self.ui.stackedWidget_agents_overviews.setCurrentWidget(widget)
@@ -740,13 +569,11 @@ class gcs_mission_interface:
         Select a task from the task overview table
         """
 
-        tasklog = self.tasklog.clone()  # > Clone to avoid concurrent access
-
         # -> Get selected task id
-        if source == self.ui.tableWidget_task_log_overview:
+        if source == self.ui.tableWidget_tasklog_overview:
             # > Get selected row id
-            selected_task_row = self.ui.tableWidget_task_log_overview.currentIndex().row()
-            selected_task_id = self.ui.tableWidget_task_log_overview.verticalHeaderItem(selected_task_row).text()
+            selected_task_row = self.ui.tableWidget_tasklog_overview.currentIndex().row()
+            selected_task_id = self.ui.tableWidget_tasklog_overview.verticalHeaderItem(selected_task_row).text()
 
             # > Select the corresponding task in the side view
             self.ui.tableWidget_tasks_select.selectRow(selected_task_row)
@@ -757,22 +584,10 @@ class gcs_mission_interface:
             selected_task_id = self.ui.tableWidget_tasks_select.verticalHeaderItem(selected_task_row).text()
 
             # > Select the corresponding task in the main view
-            self.ui.tableWidget_task_log_overview.selectRow(selected_task_row)
+            self.ui.tableWidget_tasklog_overview.selectRow(selected_task_row)
 
         # -> Get the task overview widget
-        if "overview_widget" not in self.interface_widgets["tasks"][selected_task_id].keys():
-            self.__create_task(tasklog[selected_task_id])
-
-        widget = self.interface_widgets["tasks"][selected_task_id]["overview_widget"]
-
-        # -> Get current task interface view
-        if self.selected_task_id is None:
-            self.selected_task_id = selected_task_id
-
-        self.current_task_interface_view = self.interface_widgets["tasks"][self.selected_task_id]["overview_widget"].current_interface_view
-
-        # -> Set current task interface view
-        widget.current_interface_view = self.current_task_interface_view
+        widget = self.ros_node.tasklog[selected_task_id].local["overview_widget"]
 
         # -> Switch stacked widget to the task overview
         self.ui.stackedWidget_tasks_overviews.setCurrentWidget(widget)
@@ -802,60 +617,45 @@ class gcs_mission_interface:
         # > Timestamp   # TODO: Review
         # agent.state.timestamp = pose_msg.header.stamp.sec + pose_msg.header.stamp.nanosec * 1e-9
 
-    # def __node_spinner(self):
-    #     # -> Spin once
-    #     self.single_threaded_executor.spin_once(timeout_sec=0)
-    #
-    #     # rclpy.spin_once(self.ros_node, timeout_sec=0)
-    #     # self.__update_env_view()
-
-
-class ROS_Thread(QThread):
-    def __init__(self, ros_node):
-        super().__init__()
-
-        # -> Store node
-        self.node = ros_node
-
-        # -> Create executor
-        self.executor = SingleThreadedExecutor()
-
-        # -> Add node to executor
-        self.executor.add_node(self.node)
-
-    def run(self):
-        # ----- QT timer based spin
-        # self.spin_timer = QtCore.QTimer()
-        # self.spin_timer.timeout.connect(self.node_spinner)
-        # self.spin_timer.setInterval(1)
-        # self.spin_timer.start(0.1)
-
-        while not self.executor._is_shutdown:
-            self.executor.spin_once(timeout_sec=0)
-            # print("ROS Thread spinning", random.randint(0, 1000))
-            time.sleep(0.01)
+    def __node_spinner(self):
+        # -> Spin once
+        rclpy.spin_once(self.ros_node, timeout_sec=0)
+        # rclpy.spin(self.ros_node)
 
 
 def main(args=None):
-    interface_id = f"gcs_mission_interface_{randint(0, 1000)}"
-
     # `rclpy` library is initialized
     rclpy.init(args=args)
 
-    # -> Create backend node
-    maaf_node = MAAFNode(node_id=interface_id)
-
-    executor = MultiThreadedExecutor()
-    executor.add_node(maaf_node)
-    thread = Thread(target=executor.spin)
-    thread.start()
-
-    app = gcs_mission_interface(interface_id=interface_id)
-
-    # `rclpy` library is shutdown
-    maaf_node.destroy_node()
+    app = gcs_mission_interface()
 
     rclpy.shutdown()
+
+# def main(args=None):
+#     # `rclpy` library is initialized
+#     rclpy.init(args=args)
+#
+#     ros_node = MAAFNode()
+#
+#     app = QtWidgets.QApplication(sys.argv)
+#     gui = gcs_mission_interface(ros_node=ros_node)
+#
+#     executor = MultiThreadedExecutor()
+#     executor.add_node(ros_node)
+#
+#     # -> Start the ROS2 node on a separate thread
+#     thread = Thread(target=executor.spin)
+#     thread.start()
+#
+#     # -> Start the GUI on the main thread
+#     try:
+#         gui.ui.show()
+#         sys.exit(app.exec())
+#
+#     finally:
+#         # `rclpy` library is shutdown
+#         ros_node.destroy_node()
+#         rclpy.shutdown()
 
 
 if __name__ == '__main__':

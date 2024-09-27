@@ -7,394 +7,158 @@
 import os
 from typing import Optional
 from pprint import pprint, pformat
-import time
-from copy import deepcopy, copy
 
 # Libs
-import pandas as pd
 import networkx as nx
 import matplotlib.pyplot as plt
 from pandas import to_datetime
 from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtWidgets import QVBoxLayout, QWidget
-import numpy as np
 
-import pyqtgraph as pg
-from pyqtgraph import mkPen, mkBrush
-
-from PySide6.QtGui import QColor
-
-# import matplotlib
-# matplotlib.use('tkagg')
-# from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
-# from matplotlib.figure import Figure
-# from matplotlib.animation import FuncAnimation
+import matplotlib
+matplotlib.use('tkagg')
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg, NavigationToolbar2QT
+from matplotlib.figure import Figure
 
 # Own modules
-from orchestra_config.sim_config import *
-from ..tools.BlitManager import BlitManager
-from ..ui_loader import uic
-from ..ui_singleton import NucleusSingleton
+try:
+    from orchestra_config.sim_config import *
+
+except ModuleNotFoundError:
+    from orchestra_config.orchestra_config.sim_config import *
 
 ##################################################################################################################
 
 
-# class MplCanvas(FigureCanvasQTAgg):
-#     def __init__(self, parent=None, width=5, height=4, dpi=100):
-#         self.fig = Figure(figsize=(width, height), dpi=dpi)
-#         self.axes = self.fig.add_subplot(111)
-#         super(MplCanvas, self).__init__(self.fig)
-#
-#         self.fig.subplots_adjust(left=0.001, right=0.999, bottom=0.001, top=0.999)
+class MplCanvas(FigureCanvasQTAgg):
+    def __init__(self, parent=None, width=5, height=4, dpi=100):
+        self.fig = Figure(figsize=(width, height), dpi=dpi)
+        self.axes = self.fig.add_subplot(111)
+        super(MplCanvas, self).__init__(self.fig)
+
+        self.fig.subplots_adjust(left=0.001, right=0.999, bottom=0.001, top=0.999)
 
 
 class GraphEnvView(QWidget):
-    def __init__(self):
+    def __init__(self, agent_id, ros_node):
         super().__init__()
 
         self.env_type = "graph"
+        self.ros_node = ros_node
 
         # ----------------------------------- Load GUI
-        # -> Load main singleton
-        self.nucleus = NucleusSingleton()
-
-        # self.env = copy(self.nucleus.env)
-        self.fleet = copy(self.nucleus.fleet)
-        self.tasklog = copy(self.nucleus.tasklog)
-
         # -> Widget settings
         self.show_goals = True
 
-        # -> Create Plot Widget
-        self.plot_widget = pg.PlotWidget()
-        self.plot_widget.setBackground('w')
-        self.plot_widget.setAspectLocked()
+        # -> Create canvas
+        width, height, dpi = 5, 4, 100
 
-        self.plot_view = self.plot_widget.getPlotItem()
+        self.canvas = MplCanvas(width=width, height=height, dpi=dpi)
 
-        # -> Enable autoscale of content on resize
-        self.plot_view.enableAutoRange()
+        self.fig = self.canvas.fig
+        self.axes = self.canvas.axes
 
-        # # -> Disable autscale of viewbox
-        # self.plot_view.disableAutoRange()
-        #
-        # # -> Enable auto scale of viewbox
-        # self.plot_view.enableAutoRange()
+        # > Update plot content
+        self.update()
 
-        self.plot_view.setAspectLocked(True)
+        # -> Setup layout
+        self.layout = QVBoxLayout()
+        self.layout.setContentsMargins(0, 0, 0, 0)
 
-        # > Setup layout
-        self.layout = QtWidgets.QVBoxLayout()
-        self.layout.addWidget(self.plot_widget)
+        # > Add the canvas to the layout
+        self.layout.addWidget(self.canvas)
+
+        # > Add the navigation toolbar
+        self.toolbar = NavigationToolbar2QT(self.canvas, self)
+        self.layout.addWidget(self.toolbar)
+
         self.setLayout(self.layout)
 
-        # ------------------------------- Plotting
-        self.elements_zorder = {
-            "env": 1,
-            "agents": 3,
-            "tasks": 4,
-            "agents_paths": 2
-        }
+    def update(self, *args, **kwargs) -> None:
+        """
+        Plot the current state of the simulation.
+        """
+        # -> Clear the axes
+        self.axes.clear()
 
-        self.task_marker_types = {
+        # -> Add the environment graph to the plot
+        nx.draw(self.ros_node.environment["graph"],
+                pos=self.ros_node.environment["pos"],
+                ax=self.axes,
+                node_size=150,
+                width=5,
+                edge_color="gray",
+                node_color="lightblue",
+                font_size=8)
+
+        # -> Add agents locations to the plot with legend
+        offset = 0.2
+
+        task_marker_types = {
             "GOTO": {
                 "marker": "x",
-                "color": (160, 235, 50, 255)
-                # "color": "green"
+                "color": "green"
             },
             "ACTION_1": {
-                "marker": "t",
-                "color": (255, 0, 0, 255)
-                # "color": "red"
+                "marker": "1",
+                "color": "red"
             },
             "ACTION_2": {
-                "marker": "t1",
-                "color": (255, 145, 0, 255)
-                # "color": "orange"
+                "marker": "2",
+                "color": "orange"
             },
             "NO_TASK": {
                 "marker": "2",
-                "color": (180, 180, 180, 255)
-                # "color": "gray"
+                "color": "gray"
             }
         }
 
-        self.env_view_obj = {
-            "env": None,
-            "tasks": {},
-            "agents": {},
-        }
+        for task in self.ros_node.tasklog.tasks_pending:
+            # -> Plot task with task id under the marker and marker type
+            self.axes.text(task.instructions["x"], task.instructions["y"] - 2 * offset, task.id, fontsize=10,
+                           ha="center", va="center", color="black")
+            # self.axes.text(task.instructions["x"], task.instructions["y"] - 3 * offset, task.type, fontsize=8,
+            #                ha="center", va="center", color="black")
 
-    def update_env(self):
-        # ----- Plot Environment
-        env = copy(self.nucleus.env)
+            # > Get color
+            if task.type == "GOTO":
+                color = task_marker_types[task.instructions["ACTION_AT_LOC"]]["color"]
+            else:
+                color = task_marker_types[task.type]["color"]
 
-        if env["env_type"] is not None:
-            pos = np.array(list(env["pos"].values()))
-            pos_lst = list(env["pos"].keys())
-            graph = env["graph"]   # NetworkX graph
-
-            edge_list = []
-
-            # -> Get corresponding positions indices
-            for edge in graph.edges():
-                node_1 = pos_lst.index(edge[0])
-                node_2 = pos_lst.index(edge[1])
-                edge_list.append([node_1, node_2])
-
-            edge_list = np.array(edge_list, dtype=int)
-            edge_list = np.array(edge_list)
-
-            graph = pg.GraphItem(
-                # > Graph
-                pos=pos,
-                adj=edge_list,
-
-                # > Node
-                size=30,
-                symbol='o',
-                symbolPen='b',  # Edge
-                symbolBrush='w',  # Node
-
-                # > Edge
-                pen=pg.mkPen(QColor(173, 216, 230, 100), width=10),
-
-                # > Behavior
-                movable=False,
-                rotatable=False,
-                resizable=False,
-                removable=False,
-
-                # > Node scaling
-                pxMode=True
-
+            self.axes.plot(
+                task.instructions["x"],
+                task.instructions["y"],
+                task_marker_types[task.type]["marker"],
+                color=color,
+                label=task.id,
+                markersize=10,
+                markeredgewidth=3
             )
 
-            # > Order
-            graph.setZValue(self.elements_zorder["env"])
+        agent_marker_types = {
+            "ACTION_1": {
+                "marker": "1",
+                "color": task_marker_types["ACTION_1"]["color"]
+            },
+            "ACTION_2": {
+                "marker": "2",
+                "color": task_marker_types["ACTION_2"]["color"]
+            },
+            "ACTION_1/2": {
+                "marker": "2",
+                "color": "blue"
+            },
+            "NO_TASK": {
+                "marker": "2",
+                "color": task_marker_types["NO_TASK"]["color"]
+            }
+        }
 
-            # > Enable autoscale
-            self.plot_view.enableAutoRange()
-
-            self.plot_view.addItem(graph)
-
-            self.env_view_obj["env"] = graph
-
-        self.update_plot()
-
-    def update_plot(self):
-        start = time.time()
-
-        tasklog = self.tasklog.clone()
-        fleet = self.fleet.clone()
-
-        for task in tasklog.tasks_terminated:
-            # -> Check if any artist exists
-            if task.id in self.env_view_obj["tasks"].keys():
-                for artist in self.env_view_obj["tasks"][task.id].values():
-                    self.plot_view.removeItem(artist)
-
-                # -> Clear artists
-                del self.env_view_obj["tasks"][task.id]
-
-        removed_artist_time = time.time()
-
-        x_offset = 0.3
-        y_offset = 0.3
-
-        # ----- Plot Tasks
-        # # -> Compile dict of tasks by task type and action
-        # tasks_df = self.tasklog.asdf()
-        #
-        # # > Add pen column based on task type and action
-        # def get_pen(task_type, task_action):
-        #     if task_type == "GOTO":
-        #         pen = (*self.task_marker_types[task_action]["color"], 1)
-        #     else:
-        #         pen = (*self.task_marker_types[task_type]["color"], 1)
-        #
-        #     return pen
-        #
-        # tasks_df["pen"] = tasks_df.apply(
-        #     lambda row: get_pen(row["type"], row["instructions"]["ACTION_AT_LOC"]),
-        #     axis=1
-        # )
-        #
-        # # > Add marker type
-        # tasks_df["marker"] = tasks_df.apply(
-        #     lambda row: self.task_marker_types[row["type"]]["marker"],
-        #     axis=1
-        # )
-        #
-        # tasks_df["x"] = tasks_df["instructions"].apply(lambda x: x["x"])
-        # tasks_df["y"] = tasks_df["instructions"].apply(lambda x: x["y"])
-        #
-        # # print(tasks_df.to_string())
-        #
-        # print("PENS", tasks_df["pen"])
-        #
-        # # ----- Task Marker
-        # if self.env_view_obj["tasks"] is None:
-        #     # -> Create artist
-        #     artist = pg.PlotDataItem(
-        #         pos=np.array(tasks_df[["x", "y"]]),
-        #         size=15,
-        #         symbol=tasks_df["marker"].tolist(),
-        #         pen=np.array(tasks_df["pen"]),
-        #         brush=np.array(tasks_df["pen"])
-        #     )
-        #
-        #     # -> Store artist locally
-        #     self.env_view_obj["tasks"] = artist
-        #
-        #     # -> Add artist to plot
-        #     self.plot_view.addItem(artist)
-        #
-        # else:
-        #     # -> Update artist position
-        #     self.env_view_obj["tasks"].setData(pos=np.array(tasks_df[["x", "y"]]))
-
-        # for task_type, task_actions in tasks.items():
-        #     for task_action, markers_pos in task_actions.items():
-        #         if task_type not in self.env_view_obj["tasks"].keys():
-        #             self.env_view_obj["tasks"][task_type] = {}
-        #
-        #         if task_action not in self.env_view_obj["tasks"][task_type].keys():
-        #             # -> Get color
-        #             if task_type == "GOTO":
-        #                 color = self.task_marker_types[task_action]["color"]
-        #             else:
-        #                 color = self.task_marker_types[task_type]["color"]
-        #
-        #             # -> Create artist
-        #             artist = pg.ScatterPlotItem(
-        #                 pos=np.array(markers_pos),
-        #                 size=15,
-        #                 symbol=self.task_marker_types[task_type]["marker"],
-        #                 pen=mkPen(color=color, width=1),
-        #                 brush=mkBrush(color=color)
-        #             )
-        #
-        #             # -> Store artist locally
-        #             self.env_view_obj["tasks"][task_type][task_action] = artist
-        #
-        #             # -> Add artist to plot
-        #             self.plot_view.addItem(artist)
-        #
-        #         else:
-        #             # -> Update artist position
-        #             self.env_view_obj["tasks"][task_type][task_action].setData(pos=np.array(markers_pos))
-
-        for task in tasklog.tasks_pending:
-            if task.id not in self.env_view_obj["tasks"].keys():
-                self.env_view_obj["tasks"][task.id] = {}
-
-            # > Get task position
-            task_x, task_y = task.instructions["x"], task.instructions["y"]
-
-            # ----- Task Label
-            # -> Check if task has a text artist
-            if "text" not in self.env_view_obj["tasks"][task.id].keys():
-                # -> Create artists
-                artist = pg.TextItem(
-                    text=task.id,
-                    color=(0, 0, 0),
-                    # anchor=(task_x, task_y - y_offset),
-                    anchor=(0.5, 0.5),
-                    # border=mkPen(color=(0, 0, 0), width=0.5),
-                    # fill=mkBrush(color=(255, 255, 255, 255)),
-                    angle=0,
-
-                )
-
-                # > Set position
-                artist.setPos(task_x, task_y - y_offset)
-
-                # > Order
-                artist.setZValue(self.elements_zorder["tasks"])
-
-                # -> Store artist in task local
-                self.env_view_obj["tasks"][task.id]["text"] = artist
-
-                # -> Add artist to plot
-                self.plot_view.addItem(artist)
-
-            else:
-                # -> If position changed, update position
-                if self.env_view_obj["tasks"][task.id]["text"].pos() != (task_x, task_y - y_offset):
-                    self.env_view_obj["tasks"][task.id]["text"].setPos(task_x, task_y - y_offset)
-
-            # ----- Task Marker
-            # -> Check if task has a marker artist
-            if "marker" not in self.env_view_obj["tasks"][task.id].keys():
-                # -> Get color
-                if task.type == "GOTO":
-                    color = self.task_marker_types[task.instructions["ACTION_AT_LOC"]]["color"]
-                else:
-                    color = self.task_marker_types[task.type]["color"]
-
-                # -> Create artist
-                artist = pg.ScatterPlotItem(
-                    pos=np.array([[task_x, task_y]]),
-                    size=15,
-                    symbol=self.task_marker_types[task.type]["marker"],
-                    pen=mkPen(color=(0, 0, 0), width=1),
-                    brush=mkBrush(color=color)
-                )
-
-                # > Order
-                artist.setZValue(self.elements_zorder["tasks"])
-
-                # -> Store artist in task local
-                self.env_view_obj["tasks"][task.id]["marker"] = artist
-
-                # -> Add artist to plot
-                self.plot_view.addItem(artist)
-
-            else:
-                # -> If position changed, update position
-                if self.env_view_obj["tasks"][task.id]["marker"].pos() != (task_x, task_y):
-                    self.env_view_obj["tasks"][task.id]["marker"].setData(pos=np.array([[task_x, task_y]]))
-
-        updated_tasks_time = time.time()
-
-        # # ----- Plot Agents
-        # # -> Compile agents positions
-        # agent_positions = {}
-        #
-        # for agent in self.fleet:
-        #     if str(agent.skillset) not in agent_positions.keys():
-        #         agent_positions[str(agent.skillset)] = []
-        #
-        #     agent_positions[str(agent.skillset)].append((agent.state.x, agent.state.y))
-        #
-        # for agent_type, agent_list in agent_positions.items():
-        #     if agent_type not in self.env_view_obj["agents"].keys():
-        #         # ->  Create artist
-        #         artist = pg.ScatterPlotItem(
-        #             pos=np.array(agent_list),
-        #             size=15,
-        #             symbol='o',
-        #             pen=mkPen(color=(0, 0, 0), width=1),
-        #             brush=mkBrush(color=(255, 255, 255, 255))
-        #         )
-        #
-        #         # -> Store artist locally
-        #         self.env_view_obj["agents"][agent_type] = artist
-        #
-        #         # -> Add artist to plot
-        #         self.plot_view.addItem(artist)
-        #
-        #     else:
-        #         # -> Update artist position
-        #         self.env_view_obj["agents"][agent_type].setData(pos=np.array(agent_list))
-
-        for agent in fleet:
-            if agent.name == "GCS Mission Interface":
+        # -> Plot agents paths
+        for agent in self.ros_node.fleet:
+            if agent.skillset == ["INTERFACE"]:
                 continue
-
-            if agent.id not in self.env_view_obj["agents"].keys():
-                self.env_view_obj["agents"][agent.id] = {}
 
             # > Get agent position
             agent_x, agent_y = agent.state.x, agent.state.y
@@ -403,15 +167,25 @@ class GraphEnvView(QWidget):
             # -> Get path
             if agent.plan is not None:
                 # -> Set all path points to int
-                path = [(int(step[0]), int(step[1])) for step in agent.plan.path]
+                full_path, _, _ = agent.plan.get_path(
+                    agent_id=agent.id,
+                    tasklog=self.ros_node.tasklog,
+                    requirement=None,
+                    selection="shortest"
+                )
+                path = [(int(step[0]), int(step[1])) for step in full_path]
 
             else:
                 path = [(agent_x, agent_y)]
                 print(f"!!! Agent {agent.id} has no plan !!!")
 
             # -> Trim path to current position if agent has tasks in its plan
-            if agent.plan.task_bundle:
-                path = path[path.index((agent_x, agent_y)):]
+            if agent.plan.task_sequence:
+                try:
+                    path = path[path.index((agent_x, agent_y)):]
+                except:
+                    print(f"!!! Agent {agent.id} has no current position in its path !!!")
+                    # path.insert(0, (agent_x, agent_y))
 
             # > Get agent path
             x_list, y_list = [], []
@@ -420,118 +194,60 @@ class GraphEnvView(QWidget):
                 x_list.append(step[0])
                 y_list.append(step[1])
 
-            # -> Check if task path has an artist
-            if "path" not in self.env_view_obj["agents"][agent.id].keys():
-                # -> Get color
-                if "ACTION_1" in agent.skillset and "ACTION_2" in agent.skillset:
-                    color = self.task_marker_types["ACTION_1/2"]["color"]
-                elif "ACTION_1" in agent.skillset:
-                    color = self.task_marker_types["ACTION_1"]["color"]
-                elif "ACTION_2" in agent.skillset:
-                    color = self.task_marker_types["ACTION_2"]["color"]
-                else:
-                    color = self.task_marker_types["NO_TASK"]["color"]
-
-                # -> Create artist
-                artist = pg.PlotDataItem(
-                    x=x_list,
-                    y=y_list,
-                    connect="all",
-                    pen=mkPen(color=color, width=2),
-                    pxMode=False
-                )
-
-                # > Order
-                artist.setZValue(self.elements_zorder["agents_paths"])
-
-                # -> Store artist in agent local
-                self.env_view_obj["agents"][agent.id]["path"] = artist
-
-                # -> Add artist to plot
-                self.plot_view.addItem(artist)
-
+            # > Get color
+            if "ACTION_1" in agent.skillset and "ACTION_2" in agent.skillset:
+                color = agent_marker_types["ACTION_1/2"]["color"]
+            elif "ACTION_1" in agent.skillset:
+                color = agent_marker_types["ACTION_1"]["color"]
+            elif "ACTION_2" in agent.skillset:
+                color = agent_marker_types["ACTION_2"]["color"]
             else:
-                # -> Update artist position
-                self.env_view_obj["agents"][agent.id]["path"].setData(x=x_list, y=y_list)
+                color = agent_marker_types["NO_TASK"]["color"]
 
-                # -> If position changed, update position
-                # if self.env_view_obj["agents"][agent.id]["path"].xData != x_list or self.env_view_obj["agents"][agent.id]["path"].yData != y_list:
-                #     self.env_view_obj["agents"][agent.id]["path"].setData(x=x_list, y=y_list)
+            # > Plot agent path
+            self.axes.plot(
+                x_list,
+                y_list,
+                # linestyle="--",
+                color=color,
+                label=f"{agent.id} path"
+            )
 
-            # ----- Agent Marker
-            # -> Check if agent has a marker artist
-            if "marker" not in self.env_view_obj["agents"][agent.id].keys():
-                # > Get color
-                if "ACTION_1" in agent.skillset and "ACTION_2" in agent.skillset:
-                    color = self.task_marker_types["ACTION_1/2"]["color"]
-                elif "ACTION_1" in agent.skillset:
-                    color = self.task_marker_types["ACTION_1"]["color"]
-                elif "ACTION_2" in agent.skillset:
-                    color = self.task_marker_types["ACTION_2"]["color"]
-                else:
-                    color = self.task_marker_types["NO_TASK"]["color"]
+        # -> Plot agent position
+        for agent in self.ros_node.fleet:
+            if agent.skillset == ["INTERFACE"]:
+                continue
 
-                # -> Create artist
-                artist = pg.ScatterPlotItem(
-                    pos=np.array([[agent_x, agent_y]]),
-                    size=20,
-                    symbol='o',
-                    pen=mkPen(color=(0, 0, 0), width=1),
-                    brush=mkBrush(color=color)
-                )
+            # > Get agent position
+            x, y = agent.state.x, agent.state.y
 
-                # > Order
-                artist.setZValue(self.elements_zorder["agents"])
-
-                # -> Store artist in agent local
-                self.env_view_obj["agents"][agent.id]["marker"] = artist
-
-                # -> Add artist to plot
-                self.plot_view.addItem(artist)
-
+            # > Get color
+            if "ACTION_1" in agent.skillset and "ACTION_2" in agent.skillset:
+                color = agent_marker_types["ACTION_1/2"]["color"]
+            elif "ACTION_1" in agent.skillset:
+                color = agent_marker_types["ACTION_1"]["color"]
+            elif "ACTION_2" in agent.skillset:
+                color = agent_marker_types["ACTION_2"]["color"]
             else:
-                # -> If position changed, update position
-                if self.env_view_obj["agents"][agent.id]["marker"].pos() != (agent_x, agent_y):
-                    self.env_view_obj["agents"][agent.id]["marker"].setData(pos=np.array([[agent_x, agent_y]]))
+                color = agent_marker_types["NO_TASK"]["color"]
 
-            # ----- Agent Label
-            # -> Check if agent has a text artist
-            if "text" not in self.env_view_obj["agents"][agent.id].keys():
-                # -> Create artist
-                artist = pg.TextItem(
-                    text=agent.id,
-                    color=(0, 0, 0),
-                    anchor=(0.5, 0.5),
-                    # border=mkPen(color=(0, 0, 0), width=0.5),
-                    # fill=mkBrush(color=(255, 255, 255, 255)),
-                    angle=0,
-                )
+            # > Plot agent position
+            self.axes.plot(
+                x,
+                y,
+                "o",
+                color=color,
+                label=agent.id,
+                markersize=10,
+                markeredgewidth=3
+            )
 
-                # > Set position
-                artist.setPos(agent_x + 2*0.2, agent_y + 2*0.2)
+            # -> Plot agents with agent name and markers representing skills under the marker
+            self.axes.text(x + 2*offset, y + 2*offset, agent.id, fontsize=10, ha="center", va="center", color="black")
+            # self.axes.text(x + 2*offset, y + 1*offset, agent.skillset, fontsize=4, ha="center", va="center", color="black")
 
-                # > Order
-                artist.setZValue(self.elements_zorder["agents"])
+        # -> Add legend
+        # self.axes.legend()
 
-                # -> Store artist in agent local
-                self.env_view_obj["agents"][agent.id]["text"] = artist
-
-                # -> Add artist to plot
-                self.plot_view.addItem(artist)
-
-            else:
-                # -> If position changed, update position
-                if self.env_view_obj["agents"][agent.id]["text"].pos() != (agent_x + x_offset, agent_y + y_offset):
-                    self.env_view_obj["agents"][agent.id]["text"].setPos(agent_x + x_offset, agent_y + y_offset)
-
-        updated_agents_time = time.time()
-
-        # QtGui.QGuiApplication.processEvents()
-        blit_time = time.time()
-
-        # print(f"> Updated plot: {round(time.time() - start, 4)} (rmv art.: {round(removed_artist_time - start, 4)} - upd. tasks: {round(updated_tasks_time - removed_artist_time, 4)} - upd. agents: {round(updated_agents_time - updated_agents_time, 4)} - blit: {round(blit_time - updated_agents_time, 4)}")
-        # print(f"    - Removed artists: {round(removed_artist_time - start, 4)}")
-        # print(f"    - Updated tasks: {round(updated_tasks_time - removed_artist_time, 4)}")
-        # print(f"    - Updated agents: {round(updated_agents_time - updated_agents_time, 4)}")
-        # print(f"    - Blit: {round(blit_time - updated_agents_time, 4)}")
-
+        # -> Redraw the canvas
+        self.canvas.draw()

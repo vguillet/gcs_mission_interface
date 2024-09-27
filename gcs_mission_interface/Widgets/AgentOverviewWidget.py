@@ -5,9 +5,7 @@
 
 # Built-in/Generic Imports
 import os
-import random
 from typing import Optional
-from copy import copy
 from pprint import pprint, pformat
 
 # Libs
@@ -17,29 +15,24 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 # Own modules
 from ..ui_loader import uic
-from ..ui_singleton import NucleusSingleton
 
 ##################################################################################################################
 
 
 class AgentOverviewWidget(QWidget):
-    def __init__(self, agent_id):
+    def __init__(self, agent_id, ros_node):
         super().__init__()
 
         self.agent_id = agent_id
+        self.ros_node = ros_node
 
         # ----------------------------------- Load GUI
-        # -> Load main singleton
-        self.nucleus = NucleusSingleton()
-
-        self.fleet = copy(self.nucleus.fleet) # > Create shallow copy to avoid concurrent read
-
-        # -> Load ui
+        # -> Load ui singleton
         self.ui = uic.loadUi(os.getcwd() + "/src/gcs_mission_interface/gcs_mission_interface/resources/uis/robot_overview.ui")
 
         # > Update header
         self.__update_header()
-        self.refresh()
+        self.update()
 
         # -> Setup layout
         self.layout = QVBoxLayout()
@@ -156,15 +149,18 @@ class AgentOverviewWidget(QWidget):
         self.ui.tableWidget_shared_allocation_priority_alpha.horizontalScrollBar().setValue(current_interface_view["tableWidget_current_allocation_priority_alpha_scroll_horizontal"])
         self.ui.tableWidget_shared_allocation_priority_alpha.verticalScrollBar().setValue(current_interface_view["tableWidget_current_allocation_priority_alpha_scroll_vertical"])
 
+    def refresh(self, current_interface_view):
+        self.update(current_interface_view)
+
     def __update_header(self):
         # -> Update agent details
-        self.ui.label_agent_name.setText(self.fleet[self.agent_id].name)
-        self.ui.label_agent_id.setText(str(self.fleet[self.agent_id].id))
-        self.ui.label_agent_class.setText(self.fleet[self.agent_id].agent_class)
+        self.ui.label_agent_name.setText(self.ros_node.fleet[self.agent_id].name)
+        self.ui.label_agent_id.setText(str(self.ros_node.fleet[self.agent_id].id))
+        self.ui.label_agent_class.setText(self.ros_node.fleet[self.agent_id].agent_class)
 
     def add_to_logs(self, msg):
         # -> If the message is not for this agent, return
-        if msg["target"] != self.fleet[self.agent_id].id and msg["target"] != "all":
+        if msg["target"] != self.ros_node.fleet[self.agent_id].id and msg["target"] != "all":
             return
 
         # -> Construct log message
@@ -176,19 +172,19 @@ class AgentOverviewWidget(QWidget):
         # -> Add to logs
         self.ui.plainTextEdit_logs.appendPlainText(log)
 
-    def refresh(self, *args, **kwargs):
+    def update(self, *args, **kwargs):
         # -> Agent state
         # > Last update timestamp
-        last_update_timestamp = to_datetime(self.fleet[self.agent_id].state.timestamp, unit="s")
+        last_update_timestamp = to_datetime(self.ros_node.fleet[self.agent_id].state.timestamp, unit="s")
         last_update_timestamp = last_update_timestamp.replace(microsecond=0, nanosecond=0)
 
         self.ui.label_last_update_timestamp.setText(str(last_update_timestamp))
 
         # > Battery level
-        self.ui.progressBar_battery_level.setValue(self.fleet[self.agent_id].state.battery_level)
+        self.ui.progressBar_battery_level.setValue(self.ros_node.fleet[self.agent_id].state.battery_level)
 
         # > Status
-        if self.fleet[self.agent_id].state.status == "active":
+        if self.ros_node.fleet[self.agent_id].state.status == "active":
             # > Set radio button color
             self.ui.radioButton_availability_state.setStyleSheet("color: green;")
         else:
@@ -205,78 +201,76 @@ class AgentOverviewWidget(QWidget):
 
         # > Rank
         # self.ui.comboBox_agent_rank   TODO: Fix once adjustable ranks are implemented
-        self.ui.label_current_rank.setText(str(self.fleet[self.agent_id].hierarchy_level))
+        self.ui.label_current_rank.setText(str(self.ros_node.fleet[self.agent_id].hierarchy_level))
 
         # -> Allocation state
-        if "allocation_state" not in self.fleet[self.agent_id].shared.keys():
-            # self.nucleus.get_logger().warning(f"Agent {self.fleet[self.agent_id].id} has no allocation state ({self.fleet[self.agent_id].shared.keys()})")
+        if "allocation_state" not in self.ros_node.fleet[self.agent_id].local.keys():
+            # self.ros_node.get_logger().warning(f"Agent {self.ros_node.fleet[self.agent_id].id} has no allocation state ({self.ros_node.fleet[self.agent_id].local.keys()})")
             return
 
         # > tableWidget_task_list_x
-        if "task_list_x" in self.fleet[self.agent_id].shared["allocation_state"]:
+        if "task_list_x" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_task_list_x,
-                data=self.fleet[self.agent_id].shared["allocation_state"]["task_list_x"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["task_list_x"]
             )
 
         # > tableWidget_local_bids_c
-        if "local_bids_c" in self.fleet[self.agent_id].shared["allocation_state"]:
+        if "local_bids_c" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_local_bids_c,
-                data=self.fleet[self.agent_id].shared["allocation_state"]["local_bids_c"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["local_bids_c"]
             )
 
         # > tableWidget_local_allocations_d
-        if "local_allocations_d" in self.fleet[self.agent_id].shared["allocation_state"]:
+        if "local_allocations_d" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_local_allocations_d,
-                data=self.fleet[self.agent_id].shared["allocation_state"]["local_allocations_d"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["local_allocations_d"]
             )
 
         # > tableWidget_winning_bids_y
-        if "winning_bids_y" in self.fleet[self.agent_id].shared["allocation_state"]:
+        if "winning_bids_y" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_winning_bids_y,
-                data=self.fleet[self.agent_id].shared["allocation_state"]["winning_bids_y"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["winning_bids_y"]
             )
 
         # > tableWidget_shared_bids_b
-        if "shared_bids_b" in self.fleet[self.agent_id].shared["allocation_state"]:
+        if "shared_bids_b" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_shared_bids_b,
-                data=self.fleet[self.agent_id].shared["allocation_state"]["shared_bids_b"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["shared_bids_b"]
             )
 
         # > tableWidget_shared_bids_priority_beta
-        if "shared_bids_priority_beta" in self.fleet[self.agent_id].shared["allocation_state"]:
+        if "shared_bids_priority_beta" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_shared_bids_priority_beta,
-                data=self.fleet[self.agent_id].shared["allocation_state"]["shared_bids_priority_beta"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["shared_bids_priority_beta"]
             )
 
         # > tableWidget_shared_allocations_a
-        if "shared_allocations_a" in self.fleet[self.agent_id].shared["allocation_state"]:
+        if "shared_allocations_a" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_shared_allocations_a,
-                data=self.fleet[self.agent_id].shared["allocation_state"]["shared_allocations_a"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["shared_allocations_a"]
             )
 
         # > tableWidget_shared_allocation_priority_alpha
-        if "shared_allocations_priority_alpha" in self.fleet[self.agent_id].shared["allocation_state"]:
+        if "shared_allocations_priority_alpha" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
                 table_widget=self.ui.tableWidget_shared_allocation_priority_alpha,
-                data=self.fleet[self.agent_id].shared["allocation_state"]["shared_allocations_priority_alpha"]
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["shared_allocations_priority_alpha"]
             )
 
     def __set_table_widget(self, table_widget, data):
         # -> Remove column with self ID
-        for agent_id in data.columns:
-            if "gcs_mission_interface_" in agent_id:
-                data = data.drop(columns=agent_id)
+        if self.ros_node.id in data.columns:
+            data = data.drop(columns=self.ros_node.id)
 
-        # -> Sort data
-        data.sort_index(axis=0, inplace=True)
-        data.sort_index(axis=1, inplace=True)
+        # -> Sort by column and index
+        data = data.sort_index().sort_index(axis=1)
 
         table_widget.setRowCount(len(data.index))
         table_widget.setColumnCount(len(data.columns))
@@ -297,9 +291,3 @@ class AgentOverviewWidget(QWidget):
 
         # -> Adjust column width
         table_widget.resizeColumnsToContents()
-
-        # -> Sort rows by vertical header
-        table_widget.sortItems(1, QtCore.Qt.AscendingOrder)
-
-        # -> Sort columns by horizontal header
-        table_widget.sortItems(0, QtCore.Qt.AscendingOrder)

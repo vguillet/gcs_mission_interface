@@ -12,21 +12,18 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 # Own modules
 from ..ui_loader import uic
-from ..ui_singleton import NucleusSingleton
 
 ##################################################################################################################
 
 
 class TaskOverviewWidget(QWidget):
-    def __init__(self, task):
+    def __init__(self, task, ros_node):
         super().__init__()
 
         self.task = task
+        self.ros_node = ros_node
 
         # ----------------------------------- Load GUI
-        # -> Load main singleton
-        self.nucleus = NucleusSingleton()
-
         # -> Load ui singleton
         self.ui = uic.loadUi(os.getcwd() + "/src/gcs_mission_interface/gcs_mission_interface/resources/uis/task_overview.ui")
 
@@ -40,15 +37,8 @@ class TaskOverviewWidget(QWidget):
         self.layout.addWidget(self.ui)
         self.setLayout(self.layout)
 
-    @property
-    def current_interface_view(self) -> dict:
-        current_interface_view = {}
-
-        return current_interface_view
-
-    @current_interface_view.setter
-    def current_interface_view(self, current_interface_view) -> None:
-        pass
+    def refresh(self):
+        self.update()
 
     def __update_header(self):
         # -> Update agent details
@@ -72,7 +62,7 @@ class TaskOverviewWidget(QWidget):
         else:
             self.ui.label_task_termination_timestamp.setText("N/A")
 
-    def refresh(self):
+    def update(self):
         # -> Update agent state
         # > Last update timestamp
         # TODO: Finish fixing this
@@ -93,3 +83,5 @@ class TaskOverviewWidget(QWidget):
             self.ui.label_task_status.setStyleSheet("color: green")
         elif self.task.status == "cancelled":
             self.ui.label_task_status.setStyleSheet("color: red")
+
+

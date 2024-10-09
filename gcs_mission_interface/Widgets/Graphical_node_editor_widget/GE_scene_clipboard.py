@@ -1,5 +1,5 @@
 
-import json
+from json import dumps, loads
 import logging
 
 from PySide6.QtWidgets import QApplication
@@ -32,7 +32,7 @@ class Scene_clipboard:
 
         # -> Serialize selected
         data = self.serialize_selected(delete=True)
-        str_data = json.dumps(data, indent=4, sort_keys=False)
+        str_data = dumps(data, indent=4, sort_keys=False)
 
         # -> Store serialized data in clipboard
         QApplication.instance().clipboard().setText(str_data)
@@ -45,7 +45,7 @@ class Scene_clipboard:
 
         # -> Serialize selected
         data = self.serialize_selected(delete=False)
-        str_data = json.dumps(data, indent=4, sort_keys=False)
+        str_data = dumps(data, indent=4, sort_keys=False)
 
         # -> Store serialized data in clipboard
         QApplication.instance().clipboard().setText(str_data)
@@ -59,7 +59,7 @@ class Scene_clipboard:
         # -> Retrieve serialized data from clipboard
         raw_data = QApplication.instance().clipboard().text()
         try:
-            data = json.loads(raw_data)
+            data = loads(raw_data)
         except ValueError as e:
             logger.debug("Could not load clipboard data, clipboard data is not valid JSON", e)
             return

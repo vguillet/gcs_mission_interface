@@ -7,7 +7,6 @@
 import sys
 import os
 from typing import List, Optional, Tuple
-from json import loads, dumps
 from copy import deepcopy
 from datetime import datetime
 from pprint import pprint
@@ -31,20 +30,40 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDur
 import numpy as np
 
 # Local Imports
-from orchestra_config.orchestra_config import *     # KEEP THIS LINE, DO NOT REMOVE
-from orchestra_config.sim_config import *
 
-from maaf_allocation_node.maaf_agent import MAAFAgent
+try:
+    from orchestra_config.orchestra_config import *  # KEEP THIS LINE, DO NOT REMOVE
+    from orchestra_config.sim_config import *
 
-from maaf_tools.datastructures.task.Task import Task
-from maaf_tools.datastructures.task.TaskLog import TaskLog
+    from maaf_allocation_node.maaf_agent import MAAFAgent
+    from maaf_tools.tools import *
 
-from maaf_tools.datastructures.agent.Agent import Agent
-from maaf_tools.datastructures.agent.Fleet import Fleet
-from maaf_tools.datastructures.agent.AgentState import AgentState
-from maaf_tools.datastructures.agent.Plan import Plan
+    from maaf_tools.datastructures.task.Task import Task
+    from maaf_tools.datastructures.task.TaskLog import TaskLog
 
-from maaf_msgs.msg import TeamCommStamped, Bid, Allocation
+    from maaf_tools.datastructures.agent.Agent import Agent
+    from maaf_tools.datastructures.agent.Fleet import Fleet
+    from maaf_tools.datastructures.agent.AgentState import AgentState
+    from maaf_tools.datastructures.agent.Plan import Plan
+
+    from maaf_msgs.msg import TeamCommStamped, Bid, Allocation
+
+except:
+    from orchestra_config.orchestra_config.orchestra_config import *  # KEEP THIS LINE, DO NOT REMOVE
+    from orchestra_config.orchestra_config.sim_config import *
+
+    from maaf_allocation_node.maaf_allocation_node.maaf_agent import MAAFAgent
+    from maaf_tools.maaf_tools.tools import *
+
+    from maaf_tools.maaf_tools.datastructures.task.Task import Task
+    from maaf_tools.maaf_tools.datastructures.task.TaskLog import TaskLog
+
+    from maaf_tools.maaf_tools.datastructures.agent.Agent import Agent
+    from maaf_tools.maaf_tools.datastructures.agent.Fleet import Fleet
+    from maaf_tools.maaf_tools.datastructures.agent.AgentState import AgentState
+    from maaf_tools.maaf_tools.datastructures.agent.Plan import Plan
+
+    from maaf_msgs.msg import TeamCommStamped, Bid, Allocation
 
 from .ui_singleton import UiSingleton
 

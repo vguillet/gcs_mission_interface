@@ -4,30 +4,16 @@
 """
 """
 
-import sys
-import os
 from typing import List, Optional, Tuple
 from copy import deepcopy
 from datetime import datetime
 from pprint import pprint
 
 # Libs
-import numpy as np
 import pandas as pd
-import PySide6
-from PySide6.QtCore import *
-import sys
-from PySide6 import QtCore, QtGui, QtWidgets
-from PySide6.QtWidgets import QApplication, QMainWindow, QLabel
-from PySide6.QtGui import QIcon
 
 # ROS2
-import rclpy
-from rclpy.node import Node
-from geometry_msgs.msg import Twist, PoseStamped, Point
-from sensor_msgs.msg import JointState, LaserScan
 from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDurabilityPolicy
-import numpy as np
 
 # Local Imports
 
@@ -356,7 +342,9 @@ class MAAFNode(MAAFAgent):
         fleet_state_change = self.fleet.merge(
             fleet=fleet,
             add_agent_callback=add_agent,
-            remove_agent_callback=remove_agent
+            remove_agent_callback=remove_agent,
+            tasklog_state_change_callback=None,
+            prioritise_local=False,
         )
 
         # ---- Merge received task list into local one

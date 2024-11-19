@@ -4,15 +4,9 @@
 """
 
 # Built-in/Generic Imports
-import os
-from typing import Optional
-from pprint import pprint, pformat
 
 # Libs
 import networkx as nx
-import matplotlib.pyplot as plt
-from pandas import to_datetime
-from PySide6 import QtCore, QtGui, QtWidgets
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 import matplotlib
@@ -24,7 +18,7 @@ from matplotlib.figure import Figure
 try:
     from orchestra_config.sim_config import *
 
-except ModuleNotFoundError:
+except ImportError:
     from orchestra_config.orchestra_config.sim_config import *
 
 ##################################################################################################################

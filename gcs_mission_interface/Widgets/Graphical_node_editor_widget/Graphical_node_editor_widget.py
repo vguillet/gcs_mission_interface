@@ -6,18 +6,16 @@ import logging
 import threading
 
 # Libs
-from src.GUI.Tools.UI_importer import uic
-from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QGraphicsView, QGraphicsItem, QApplication
 
 # Own modules
+from src.GUI.Tools.UI_importer import uic
 from src.GUI.Widgets.Graphical_node_editor_widget.GE_scene import GE_scene
 from src.GUI.Widgets.Graphical_node_editor_widget.GE_graphics_view import GE_graphics_view
 from src.GUI.Widgets.Graphical_node_editor_widget.GE_node import GE_node
 from src.GUI.Widgets.Graphical_node_editor_widget.GE_edge import *
-# from src.GUI.Widgets.Connection_dialog.Connection_dialog import Connection_dialog
 
 from src.GUI.UI_singletons import Nucleus_singleton
 from src.Backend.Utils.Block_loader import *

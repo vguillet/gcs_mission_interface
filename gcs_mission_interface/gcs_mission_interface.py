@@ -6,32 +6,25 @@
 
 import os
 import sys
-from typing import List, Optional
-from copy import deepcopy
 from functools import partial
-from threading import Thread
-from pprint import pprint, pformat
+from copy import deepcopy
+import time
 
 # Libs
-import numpy as np
-import pandas as pd
-import PySide6
-from PySide6.QtCore import *
+from PySide6.QtCore import Signal, QObject
 from PySide6 import QtCore, QtGui, QtWidgets
-from PySide6.QtWidgets import QApplication, QMainWindow, QLabel
 from PySide6.QtGui import QIcon
 
 # ROS2
 import rclpy
-from rclpy.node import Node
 from geometry_msgs.msg import Twist, PoseStamped, Point
-from sensor_msgs.msg import JointState, LaserScan
-from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy
 
 # Local Imports
-from orchestra_config.orchestra_config import *     # KEEP THIS LINE, DO NOT REMOVE
 
 try:
+    from orchestra_config.orchestra_config import *  # KEEP THIS LINE, DO NOT REMOVE
+    from orchestra_config.sim_config import *
+
     from maaf_tools.datastructures.task.Task import Task
     from maaf_tools.datastructures.task.TaskLog import TaskLog
 
@@ -43,6 +36,9 @@ try:
     from maaf_tools.tools import *
 
 except ImportError:
+    from orchestra_config.orchestra_config import *  # KEEP THIS LINE, DO NOT REMOVE
+    from orchestra_config.orchestra_config.sim_config import *
+
     from maaf_tools.maaf_tools.datastructures.task.Task import Task
     from maaf_tools.maaf_tools.datastructures.task.TaskLog import TaskLog
 
@@ -62,6 +58,19 @@ from .Widgets.BaseTaskWidget import BaseTaskWidget
 from .Widgets.GraphEnvView import GraphEnvView
 
 ##################################################################################################################
+
+
+class RefreshTimerEmitter(QObject):
+    signal = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.signal_timer = QtCore.QTimer()
+        self.signal_timer.setInterval(100)
+        self.signal_timer.timeout.connect(self.signal.emit)
+
+    def start(self):
+        self.signal_timer.start()
 
 
 class gcs_mission_interface:
@@ -89,19 +98,22 @@ class gcs_mission_interface:
 
         self.ui.env_widget = None
 
-        # -> Add environment widget update listener to environment update listeners
-        self.ros_node.add_on_env_update_listener(self.__update_env_view)
+        # ----- Connect refresh listeners
+        self.refresh_signal_emitter = RefreshTimerEmitter()
 
-        # ---- Connect listeners
+        # - Environment listeners
+        # self.refresh_signal_emitter.signal.connect(self.__update_env_view)
+
+        # - Mission state listeners
+        # self.refresh_signal_emitter.signal.connect(self.__update_mission_state_overview)
+
         # - Fleet listeners
-        self.ros_node.fleet.add_on_add_item_listener(self.__create_agent)
-        self.ros_node.fleet.add_on_edit_list_listener(self.__update_agents)
-        self.ros_node.fleet.add_on_state_change_listener(self.__update_env_view)
+        # self.refresh_signal_emitter.signal.connect(self.__create_agents)
+        # self.refresh_signal_emitter.signal.connect(self.__update_agents)
 
         # - Task log listeners
-        self.ros_node.tasklog.add_on_add_item_listener(self.__create_task)
-        self.ros_node.tasklog.add_on_edit_list_listener(self.__update_tasks)
-        self.ros_node.tasklog.add_on_status_change_listener(self.__update_env_view)
+        self.refresh_signal_emitter.signal.connect(self.__create_tasks)
+        self.refresh_signal_emitter.signal.connect(self.__update_tasks)
 
         # -> QT timer based spin
         self.spin_timer = QtCore.QTimer()
@@ -109,7 +121,10 @@ class gcs_mission_interface:
         self.spin_timer.setInterval(10)
         self.spin_timer.start()
 
-        # ---- Connect signals
+        # -> Refresh signal generator
+        self.refresh_signal_emitter.start()
+
+        # ----- Connect other signals
         self.ui.pushButton_reset_local_allocation_node.clicked.connect(self.__reset_local_allocation_node)
         self.ui.pushButton_task_overview_view_switcher.clicked.connect(self.__switch_task_overview_view_mode)
 
@@ -161,6 +176,15 @@ class gcs_mission_interface:
         self.current_task_interface_view = None
 
     # ------------------------------ Create
+    def __create_agents(self, *args, **kwargs) -> None:
+        """
+        Create all the widgets and subscribers for the agents
+        """
+        # -> Check that all agents in fleet have a widget. If not, create agent widget
+        for agent in self.ros_node.fleet:
+            if "overview_widget" not in agent.local:
+                self.__create_agent(agent)
+
     def __create_agent(self, agent: Agent, *args, **kwargs) -> None:
         """
         Create all the widgets and subscribers for the agent
@@ -176,8 +200,8 @@ class gcs_mission_interface:
         self.ui.stackedWidget_agents_overviews.addWidget(widget)
 
         # -> Connect widget listeners
-        self.ros_node.add_team_msg_subscriber_callback_listener(widget.update)
         self.ros_node.add_team_msg_subscriber_callback_listener(widget.add_to_logs)
+        self.refresh_signal_emitter.signal.connect(widget.update)
 
         # ----- Pose subscriber
         # -> Create subscriber
@@ -190,6 +214,16 @@ class gcs_mission_interface:
 
         # -> Add to the agent local
         agent.local["pose_subscriber"] = pose_subscriber
+
+    def __create_tasks(self, *args, **kwargs) -> None:
+        """
+        Create all the widgets and subscribers for the tasks
+        """
+
+        # -> Check that all task in the task log have a widget. If not, create task widget
+        for task in self.ros_node.tasklog:
+            if "overview_widget" not in task.local:
+                self.__create_task(task)
 
     def __create_task(self, task: Task, *args, **kwargs) -> None:
         # -> Create overview widget
@@ -209,6 +243,10 @@ class gcs_mission_interface:
 
         # -> Add widget to layout
         self.ui.verticalLayout_tasks_overview_base_widgets.addWidget(base_widget)
+
+        # -> Connect widget listeners
+        self.refresh_signal_emitter.signal.connect(overview_widget.update)
+        self.refresh_signal_emitter.signal.connect(base_widget.update)
 
     # ------------------------------ Track
     def __track_current_agent_interface_view(self, current_interface_view: dict) -> None:
@@ -239,6 +277,9 @@ class gcs_mission_interface:
         """
         Update the interface
         """
+
+        if self.ros_node.environment is None:
+            return
 
         # -> If no environment widget exists, create one
         if self.ui.env_widget is None:
@@ -295,11 +336,8 @@ class gcs_mission_interface:
         Update the agent overview widgets
         """
 
-        # ---- Update mission state overview
-        self.__update_mission_state_overview()
-
         # -> Sort the fleet
-        self.ros_node.fleet.sort(key=lambda agent: agent.id)
+        # self.ros_node.fleet.sort(key=lambda agent: agent.id)
 
         # ---- Update agent MAIN VIEW
         # -> Construct table to display
@@ -406,15 +444,10 @@ class gcs_mission_interface:
         Update the task overview widgets
         """
 
-        # ---- Update mission state overview
-        self.__update_mission_state_overview()
+        start_time = time.time()
 
-        self.ros_node.tasklog.sort(key=lambda task: task.creation_timestamp, reverse=True)
-
-        # ---- Update task log MAIN VIEW Rendered
-        # -> Update base widgets
-        for task in self.ros_node.tasklog:
-            task.local["base_widget"].refresh()
+        # -> Sort the task log
+        # self.ros_node.tasklog.sort(key=lambda task: task.creation_timestamp, reverse=True)
 
         # ---- Update task log MAIN VIEW Raw
         # -> Construct table to display
@@ -534,6 +567,8 @@ class gcs_mission_interface:
         if not self.selected_task_id:
             self.ui.tableWidget_tasks_select.selectRow(0)
             self.__select_task(source=self.ui.tableWidget_tasks_select)
+
+        self.ros_node.get_logger().info(f"Task refresh time: {time.time() - start_time}")
 
     # ------------------------------ Select
     def __select_agent(self, source, *args, **kwargs) -> None:

@@ -124,7 +124,7 @@
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_7">
         <item>
-         <widget class="QTableWidget" name="tableWidget_fleet_overview">
+         <widget class="QTableView" name="tableView_agents_overview">
           <property name="editTriggers">
            <set>QAbstractItemView::NoEditTriggers</set>
           </property>
@@ -175,7 +175,7 @@
              <number>0</number>
             </property>
             <item>
-             <widget class="QTableView" name="tableView_tasklog_overview">
+             <widget class="QTableView" name="tableView_tasks_overview">
               <property name="editTriggers">
                <set>QAbstractItemView::NoEditTriggers</set>
               </property>
@@ -190,6 +190,9 @@
               </property>
               <property name="selectionBehavior">
                <enum>QAbstractItemView::SelectRows</enum>
+              </property>
+              <property name="sortingEnabled">
+               <bool>true</bool>
               </property>
              </widget>
             </item>
@@ -396,7 +399,7 @@
               </widget>
              </item>
              <item>
-              <widget class="QTableWidget" name="tableWidget_agents_select">
+              <widget class="QTableView" name="tableView_agents_select">
                <property name="editTriggers">
                 <set>QAbstractItemView::NoEditTriggers</set>
                </property>
@@ -515,6 +518,9 @@
                </property>
                <property name="selectionBehavior">
                 <enum>QAbstractItemView::SelectRows</enum>
+               </property>
+               <property name="sortingEnabled">
+                <bool>true</bool>
                </property>
               </widget>
              </item>

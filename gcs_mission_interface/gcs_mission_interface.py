@@ -11,9 +11,10 @@ from copy import deepcopy
 import time
 
 # Libs
-from PySide6.QtCore import Signal, QObject
 from PySide6 import QtCore, QtGui, QtWidgets
+from PySide6.QtCore import Signal, QObject, QAbstractTableModel, Qt, QItemSelection, QItemSelectionModel
 from PySide6.QtGui import QIcon
+from PySide6.QtWidgets import QHeaderView, QTableView
 
 # ROS2
 import rclpy
@@ -93,33 +94,55 @@ class gcs_mission_interface:
         self.selected_agent_id = None
         self.selected_task_id = None
 
-        self.current_agent_interface_view = None
-        self.current_task_interface_view = None
+        self.current_agent_id_selection = None
+        self.current_task_id_selection = None
 
         self.ui.env_widget = None
 
         # ----- Connect refresh listeners
+        self.refresh_flags = {
+            "env": False,
+            "fleet": False,
+            "tasks": False,
+        }
+
         self.refresh_signal_emitter = RefreshTimerEmitter()
 
         # - Environment listeners
+        # Event based
+        # self.ros_node.add_on_env_update_listener(partial(self.stage_for_refresh, target="env"))
+
+        # Signal based
         # self.refresh_signal_emitter.signal.connect(self.__update_env_view)
 
         # - Mission state listeners
-        # self.refresh_signal_emitter.signal.connect(self.__update_mission_state_overview)
+        # Event based
+
+        # Signal based
+        self.refresh_signal_emitter.signal.connect(self.__update_mission_state_overview)
 
         # - Fleet listeners
+        # Event based
+        # self.ros_node.fleet.add_on_add_item_listener(self.__create_agent)
+        # self.ros_node.fleet.add_on_edit_list_listener(self.__update_agents)
+        self.ros_node.fleet.add_on_edit_list_listener(partial(self.stage_for_refresh, target="fleet"))
+
+        self.refresh_signal_emitter.signal.connect(partial(self.refreshUI, target="fleet"))
+
+        # Signal based
         # self.refresh_signal_emitter.signal.connect(self.__create_agents)
         # self.refresh_signal_emitter.signal.connect(self.__update_agents)
 
         # - Task log listeners
-        self.refresh_signal_emitter.signal.connect(self.__create_tasks)
-        self.refresh_signal_emitter.signal.connect(self.__update_tasks)
+        # Event based
+        # self.ros_node.tasklog.add_on_add_item_listener(self.__create_task)
+        # self.ros_node.tasklog.add_on_edit_list_listener(self.update_task_tables)
+        self.ros_node.tasklog.add_on_edit_list_listener(partial(self.stage_for_refresh, target="tasks"))
 
-        # -> QT timer based spin
-        self.spin_timer = QtCore.QTimer()
-        self.spin_timer.timeout.connect(self.__node_spinner)
-        self.spin_timer.setInterval(10)
-        self.spin_timer.start()
+        self.refresh_signal_emitter.signal.connect(partial(self.refreshUI, target="tasks"))
+
+        # Signal based
+        # self.refresh_signal_emitter.signal.connect(self.__update_tasks)
 
         # -> Refresh signal generator
         self.refresh_signal_emitter.start()
@@ -133,27 +156,57 @@ class gcs_mission_interface:
 
         # -> Agent selection
         self.ui.tableWidget_agents_select.itemSelectionChanged.connect(
-            partial(self.__select_agent, source=self.ui.tableWidget_tasks_select)
-        )      # SIDE VIEW
+            partial(self.__select_agent, source=self.ui.tableView_tasks_select)
+        )    # SIDE VIEW
         self.ui.tableWidget_fleet_overview.itemSelectionChanged.connect(
             partial(self.__select_agent, source=self.ui.tableWidget_fleet_overview)
         )    # MAIN VIEW
 
         # -> Task selection
-        self.ui.tableWidget_tasks_select.itemSelectionChanged.connect(
-            partial(self.__select_task, source=self.ui.tableWidget_tasks_select)
-        )   # SIDE VIEW
-        self.ui.tableWidget_tasklog_overview.itemSelectionChanged.connect(
-            partial(self.__select_task, source=self.ui.tableWidget_tasklog_overview)
-        )   # MAIN VIEW
+        # SIDE VIEW
+        self.ui.tableView_tasks_select.setModel(TaskTableModel([], []))
+        self.tableView_tasks_selection_model = self.ui.tableView_tasks_select.selectionModel()
+        # selection_model.selectionChanged.connect(partial(self.__select_task, source=self.ui.tableView_tasks_select))
+        self.tableView_tasks_selection_model.selectionChanged.connect(self.__select_task)
+
+        # MAIN VIEW
+        self.ui.tableView_tasklog_overview.setModel(TaskTableModel([], []))
+        selection_model = self.ui.tableView_tasklog_overview.selectionModel()
+        # selection_model.selectionChanged.connect(partial(self.__select_task, source=self.ui.tableView_tasklog_overview))
+        selection_model.selectionChanged.connect(self.__select_task)
 
         # ----------------------------------- Final setup
+        # -> QT timer based spin
+        self.spin_timer = QtCore.QTimer()
+        self.spin_timer.timeout.connect(self.__node_spinner)
+        self.spin_timer.setInterval(10)
+        self.spin_timer.start()
+
         # -> Display windows
         self.ui.show()
 
         # ----------------------------------- Terminate ROS2 node on exit
         # self.ros_node.destroy_node()
         sys.exit(app.exec())
+
+    # ============================================================== REFRESH EVENT LOGIC HANDLER
+    def refreshUI(self, target):
+        if self.refresh_flags[target] is True:
+            if target == "env":
+                self.__update_env_view()
+
+            elif target == "fleet":
+                self.__create_agents()
+                self.__update_agents()
+
+            elif target == "tasks":
+                self.__create_tasks()
+                self.update_task_tables()
+
+            self.refresh_flags[target] = False
+
+    def stage_for_refresh(self, _, target, *args, **kwargs):
+        self.refresh_flags[target] = True
 
     # ============================================================== METHODS
     def __reset_local_allocation_node(self, *args, **kwargs):
@@ -172,8 +225,8 @@ class gcs_mission_interface:
         self.selected_agent_id = None
         self.selected_task_id = None
 
-        self.current_agent_interface_view = None
-        self.current_task_interface_view = None
+        self.current_agent_id_selection = None
+        self.current_task_id_selection = None
 
     # ------------------------------ Create
     def __create_agents(self, *args, **kwargs) -> None:
@@ -250,10 +303,10 @@ class gcs_mission_interface:
 
     # ------------------------------ Track
     def __track_current_agent_interface_view(self, current_interface_view: dict) -> None:
-        self.current_agent_interface_view = current_interface_view
+        self.current_agent_id_selection = current_interface_view
 
     def __track_current_task_interface_view(self, current_interface_view: dict) -> None:
-        self.current_task_interface_view = current_interface_view
+        self.current_task_id_selection = current_interface_view
 
     # ------------------------------ Update
     def __switch_task_overview_view_mode(self, *args, **kwargs) -> None:
@@ -432,12 +485,72 @@ class gcs_mission_interface:
                 self.ui.tableWidget_agents_select.setItem(i, j, QtWidgets.QTableWidgetItem(str(cell)))
 
         # > Resize columns
-        self.ui.tableWidget_tasks_select.resizeColumnsToContents()
+        self.ui.tableView_tasks_select.resizeColumnsToContents()
 
         # -> Select first agent if no agent is selected
         if not self.selected_agent_id:
             self.ui.tableWidget_agents_select.selectRow(0)
             self.__select_agent(source=self.ui.tableWidget_agents_select)
+
+    def update_task_tables(self, *args, **kwargs) -> None:
+        # -> Define column headers
+        overview_columns = ["ID", "Type", "Priority", "Affiliations", "Creator", "Creation Timestamp", "Termination Timestamp", "Status", "Termination Source"]
+        select_columns = ["ID", "Type", "Priority", "Creation Timestamp", "Status"]
+
+        # -> Check if task log is empty
+        if not self.ros_node.tasklog:
+            # -> Create empty models with headers only
+            overview_model = TaskTableModel(tasklog=None, columns=overview_columns)
+            select_model = TaskTableModel(tasklog=None, columns=select_columns)
+
+        else:
+            # -> Create data models
+            overview_model = TaskTableModel(tasklog=self.ros_node.tasklog, columns=overview_columns)
+            select_model = TaskTableModel(tasklog=self.ros_node.tasklog, columns=select_columns)
+
+        # -> Set models to table views
+        self.ui.tableView_tasklog_overview.setModel(overview_model)
+        self.ui.tableView_tasks_select.setModel(select_model)
+
+        # -> Reconnect selection models
+        self.ui.tableView_tasklog_overview.selectionModel().selectionChanged.connect(
+            partial(self.__select_task, source="tableView_tasklog_overview")
+        )
+        self.ui.tableView_tasks_select.selectionModel().selectionChanged.connect(
+            partial(self.__select_task, source="tableView_tasks_select")
+        )
+
+        # -> Reapply the shared selection based on the ID
+        if self.current_task_id_selection is not None:
+            # Reapply selection in the tasklog_overview table
+            for row in range(overview_model.rowCount()):
+                task_id = overview_model.data(overview_model.index(row, 0))  # Get ID from first column
+                if task_id == self.current_task_id_selection:
+                    self.ui.tableView_tasklog_overview.selectRow(row)
+                    break  # Stop once the row is found
+
+            # Reapply selection in the tasks_select table
+            for row in range(select_model.rowCount()):
+                task_id = select_model.data(select_model.index(row, 0))  # Get ID from first column
+                if task_id == self.current_task_id_selection:
+                    self.ui.tableView_tasks_select.selectRow(row)
+                    break  # Stop once the row is found
+
+        else:
+            # -> Select first task if no task is selected
+            self.ui.tableView_tasks_select.selectRow(0)
+
+        # -> Configure table views for better appearance
+        self.__configure_table_view(self.ui.tableView_tasklog_overview)
+        self.__configure_table_view(self.ui.tableView_tasks_select)
+
+    def __configure_table_view(self, table_view):
+        header = table_view.horizontalHeader()
+        header.setSectionResizeMode(QHeaderView.ResizeToContents)
+        header.setStretchLastSection(True)
+        table_view.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        table_view.setSelectionBehavior(QTableView.SelectRows)
+        table_view.setSelectionMode(QTableView.SingleSelection)
 
     def __update_tasks(self, *args, **kwargs) -> None:
         """
@@ -485,15 +598,15 @@ class gcs_mission_interface:
                 termination_source_id
             ])
 
-        # -> If there are no agents, return
+        # -> If there are no tasks, return
         if len(task_data) == 0:
             # -> Clear tables rows
-            self.ui.tableWidget_tasklog_overview.clear()
-            self.ui.tableWidget_tasks_select.clear()
+            self.ui.tableView_tasklog_overview.clear()
+            self.ui.tableView_tasks_select.clear()
 
             # -> Remove all rows
-            self.ui.tableWidget_tasklog_overview.setRowCount(0)
-            self.ui.tableWidget_tasks_select.setRowCount(0)
+            self.ui.tableView_tasklog_overview.setRowCount(0)
+            self.ui.tableView_tasks_select.setRowCount(0)
 
             return
 
@@ -510,23 +623,23 @@ class gcs_mission_interface:
             "Termination Source"
         ]
 
-        self.ui.tableWidget_tasklog_overview.setColumnCount(len(headers))
-        self.ui.tableWidget_tasklog_overview.setHorizontalHeaderLabels(headers)
+        self.ui.tableView_tasklog_overview.setColumnCount(len(headers))
+        self.ui.tableView_tasklog_overview.setHorizontalHeaderLabels(headers)
 
         # > Set the ids as the row headers
-        self.ui.tableWidget_tasklog_overview.setRowCount(len(task_data))
-        self.ui.tableWidget_tasklog_overview.setVerticalHeaderLabels([str(id) for id in task_ids])
+        self.ui.tableView_tasklog_overview.setRowCount(len(task_data))
+        self.ui.tableView_tasklog_overview.setVerticalHeaderLabels([str(id) for id in task_ids])
 
         # > Enable word wrap for the row headers
-        self.ui.tableWidget_tasklog_overview.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.ui.tableView_tasklog_overview.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
 
         # > Set the data
         for i, row in enumerate(task_data):
             for j, cell in enumerate(row):
-                self.ui.tableWidget_tasklog_overview.setItem(i, j, QtWidgets.QTableWidgetItem(str(cell)))
+                self.ui.tableView_tasklog_overview.setItem(i, j, QtWidgets.QTableWidgetItem(str(cell)))
 
         # > Resize columns
-        self.ui.tableWidget_tasklog_overview.resizeColumnsToContents()
+        self.ui.tableView_tasklog_overview.resizeColumnsToContents()
 
         # ---- Update task log SIDE VIEW
         # -> Construct table to display
@@ -543,30 +656,30 @@ class gcs_mission_interface:
             task_data.append([task.type, task.priority, creation_timestamp, task.status.capitalize()])
 
         # -> Update table
-        self.ui.tableWidget_tasks_select.setRowCount(len(task_data))
-        self.ui.tableWidget_tasks_select.setColumnCount(len(task_data[0]))
+        self.ui.tableView_tasks_select.setRowCount(len(task_data))
+        self.ui.tableView_tasks_select.setColumnCount(len(task_data[0]))
 
         # > Set the column headers
-        self.ui.tableWidget_tasks_select.setHorizontalHeaderLabels(["Type", "Priority", "Creation Timestamp", "Status"])
+        self.ui.tableView_tasks_select.setHorizontalHeaderLabels(["Type", "Priority", "Creation Timestamp", "Status"])
 
         # > Set the ids as the row headers
-        self.ui.tableWidget_tasks_select.setVerticalHeaderLabels([str(id) for id in task_ids])
+        self.ui.tableView_tasks_select.setVerticalHeaderLabels([str(id) for id in task_ids])
 
         # > Enable word wrap for the row headers
-        self.ui.tableWidget_tasks_select.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
+        self.ui.tableView_tasks_select.verticalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeToContents)
 
         # > Set the data
         for i, row in enumerate(task_data):
             for j, cell in enumerate(row):
-                self.ui.tableWidget_tasks_select.setItem(i, j, QtWidgets.QTableWidgetItem(str(cell)))
+                self.ui.tableView_tasks_select.setItem(i, j, QtWidgets.QTableWidgetItem(str(cell)))
 
         # > Resize columns
-        self.ui.tableWidget_tasks_select.resizeColumnsToContents()
+        self.ui.tableView_tasks_select.resizeColumnsToContents()
 
-        # -> Select first task if no task is selected
-        if not self.selected_task_id:
-            self.ui.tableWidget_tasks_select.selectRow(0)
-            self.__select_task(source=self.ui.tableWidget_tasks_select)
+        # # -> Select first task if no task is selected
+        # if not self.selected_task_id:
+        #     self.ui.tableView_tasks_select.selectRow(0)
+        #     self.__select_task(self.ui.tableView_tasks_select)
 
         self.ros_node.get_logger().info(f"Task refresh time: {time.time() - start_time}")
 
@@ -599,10 +712,10 @@ class gcs_mission_interface:
 
         if self.selected_agent_id is not None:
             # -> Get current agent interface view
-            self.current_agent_interface_view = self.ros_node.fleet[self.selected_agent_id].local["overview_widget"].current_interface_view
+            self.current_agent_id_selection = self.ros_node.fleet[self.selected_agent_id].local["overview_widget"].current_interface_view
 
             # -> Set current agent interface view
-            widget.current_interface_view = self.current_agent_interface_view
+            widget.current_interface_view = self.current_agent_id_selection
 
         # -> Switch stacked widget to the agent overview
         self.ui.stackedWidget_agents_overviews.setCurrentWidget(widget)
@@ -610,36 +723,81 @@ class gcs_mission_interface:
         # -> Set the selected agent id
         self.selected_agent_id = selected_agent_id
 
-    def __select_task(self, source, *args, **kwargs) -> None:
-        """
-        Select a task from the task overview table
-        """
+    def __select_task(self, selected, deselected, task_id=None, source=None):
 
-        # -> Get selected task id
-        if source == self.ui.tableWidget_tasklog_overview:
-            # > Get selected row id
-            selected_task_row = self.ui.tableWidget_tasklog_overview.currentIndex().row()
-            selected_task_id = self.ui.tableWidget_tasklog_overview.verticalHeaderItem(selected_task_row).text()
+        if source is None:
+            pass
 
-            # > Select the corresponding task in the side view
-            self.ui.tableWidget_tasks_select.selectRow(selected_task_row)
+        if selected.indexes():
+            row_index = selected.indexes()[0].row()
+            column_index = selected.indexes()[0].column()
 
-        else:
-            # -> Get the selected task id
-            selected_task_row = self.ui.tableWidget_tasks_select.currentIndex().row()
-            selected_task_id = self.ui.tableWidget_tasks_select.verticalHeaderItem(selected_task_row).text()
+            # ---- Get ID from selected
+            if source == "tableView_tasklog_overview":
+                # -> Get new selection
+                self.current_task_id_selection = (
+                    self.ui.tableView_tasklog_overview.model().data(self.ui.tableView_tasklog_overview.model().index(row_index, 0)))
 
-            # > Select the corresponding task in the main view
-            self.ui.tableWidget_tasklog_overview.selectRow(selected_task_row)
+                # -> Apply selection to the side view
+                self.ui.tableView_tasks_select.selectRow(row_index)
 
-        # -> Get the task overview widget
-        widget = self.ros_node.tasklog[selected_task_id].local["overview_widget"]
+            elif source == "tableView_tasks_select":
+                # -> Get new selection
+                self.current_task_id_selection = (
+                    self.ui.tableView_tasks_select.model().data(self.ui.tableView_tasks_select.model().index(row_index, 0)))
 
-        # -> Switch stacked widget to the task overview
-        self.ui.stackedWidget_tasks_overviews.setCurrentWidget(widget)
+                # -> Apply selection to the main view
+                self.ui.tableView_tasklog_overview.selectRow(row_index)
 
-        # -> Set the selected task id
-        self.selected_task_id = selected_task_id
+            # -> Get the task overview widget
+            widget = self.ros_node.tasklog[self.current_task_id_selection].local["overview_widget"]
+
+            # -> Switch stacked widget to the task overview
+            self.ui.stackedWidget_tasks_overviews.setCurrentWidget(widget)
+
+
+    # def __select_task(self, source, *args, **kwargs) -> None:
+    #     """
+    #     Select a task from the task overview table
+    #     """
+    #
+    #     # -> Get selected task id
+    #     if source == self.ui.tableView_tasklog_overview:
+    #         # > Get selected row id
+    #         selected_task_row = self.ui.tableView_tasklog_overview.currentIndex().row()
+    #         selected_task = self.ui.tableView_tasklog_overview.verticalHeaderItem(selected_task_row)
+    #
+    #         if selected_task is None:
+    #             return
+    #
+    #         # -> Get task id
+    #         selected_task_id = selected_task.text()
+    #
+    #         # > Select the corresponding task in the side view
+    #         self.ui.tableView_tasks_select.selectRow(selected_task_row)
+    #
+    #     else:
+    #         # -> Get the selected task id
+    #         selected_task_row = self.ui.tableView_tasks_select.currentIndex().row()
+    #         selected_task = self.ui.tableView_tasks_select.verticalHeaderItem(selected_task_row)
+    #
+    #         if selected_task is None:
+    #             return
+    #
+    #         # -> Get task id
+    #         selected_task_id = selected_task.text()
+    #
+    #         # > Select the corresponding task in the main view
+    #         self.ui.tableView_tasklog_overview.selectRow(selected_task_row)
+    #
+    #     # -> Get the task overview widget
+    #     widget = self.ros_node.tasklog[selected_task_id].local["overview_widget"]
+    #
+    #     # -> Switch stacked widget to the task overview
+    #     self.ui.stackedWidget_tasks_overviews.setCurrentWidget(widget)
+    #
+    #     # -> Set the selected task id
+    #     self.selected_task_id = selected_task_id
 
     # ================================================= Custom ROS2 integration
     def pose_subscriber_callback(self, pose_msg, agent) -> None:
@@ -667,6 +825,73 @@ class gcs_mission_interface:
         # -> Spin once
         rclpy.spin_once(self.ros_node, timeout_sec=0)
         # rclpy.spin(self.ros_node)
+
+
+class TaskTableModel(QAbstractTableModel):
+    def __init__(self, tasklog=None, columns=None):
+        super().__init__()
+        self.tasklog = tasklog if tasklog is not None else []
+        self.columns = columns if columns is not None else []
+
+    def rowCount(self, parent=None):
+        return len(self.tasklog)
+
+    def columnCount(self, parent=None):
+        return len(self.columns)
+
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid() or role != Qt.DisplayRole:
+            return None
+
+        if index.row() >= len(self.tasklog) or index.column() >= len(self.columns):
+            return None  # Handle out-of-range access safely
+
+        task = self.tasklog.get_by_index(index=index.row())
+        column = self.columns[index.column()]
+
+        if task is None:
+            return None
+
+        # Map column names to task attributes or derived values
+        if column == "ID":
+            return task.id
+        elif column == "Type":
+            return task.type
+        elif column == "Priority":
+            return task.priority
+        elif column == "Affiliations":
+            return ", ".join(task.affiliations) if task.affiliations else "N/A"
+        elif column == "Creator":
+            return task.creator
+        elif column == "Creation Timestamp":
+            return pd.to_datetime(task.creation_timestamp, unit="s").replace(microsecond=0, nanosecond=0).strftime('%Y-%m-%d %H:%M:%S')
+        elif column == "Termination Timestamp":
+            if task.termination_timestamp is not None:
+                return pd.to_datetime(task.termination_timestamp, unit="s").replace(microsecond=0, nanosecond=0).strftime('%Y-%m-%d %H:%M:%S')
+            return "N/A"
+        elif column == "Status":
+            return task.status.capitalize()
+        elif column == "Termination Source":
+            return task.termination_source_id if task.termination_source_id is not None else "N/A"
+        return None
+
+    def headerData(self, section, orientation, role=Qt.DisplayRole):
+        if role != Qt.DisplayRole:
+            return None
+
+        if orientation == Qt.Horizontal:
+            return self.columns[section] if section < len(self.columns) else None
+
+        # elif orientation == Qt.Vertical:
+        #     if section < len(self.tasklog) and self.tasklog.get_by_index(index=section) is not None:
+        #         return str(self.tasklog.get_by_index(index=section).id)
+        #     return None  # Use None to indicate no valid task ID
+
+        elif orientation == Qt.Vertical:
+            # No change needed for the vertical header, this will just display row indices
+            return str(section + 1)  # Default to 1-based indexing for row headers
+
+        return None
 
 
 def main(args=None):

@@ -178,7 +178,8 @@ class GraphEnvView(QWidget):
                 try:
                     path = path[path.index((agent_x, agent_y)):]
                 except:
-                    print(f"!!! Agent {agent.id} has no current position in its path !!!")
+                    pass
+                    # print(f"!!! Agent {agent.id} has no current position in its path !!!")
                     # path.insert(0, (agent_x, agent_y))
 
             # > Get agent path

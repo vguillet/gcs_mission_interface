@@ -12,9 +12,9 @@ import time
 
 # Libs
 from PySide6 import QtCore, QtGui, QtWidgets
-from PySide6.QtCore import Signal, QObject, QAbstractTableModel, Qt, QItemSelection, QItemSelectionModel
+from PySide6.QtCore import Signal, QObject, QAbstractTableModel, Qt, QItemSelection, QItemSelectionModel, QModelIndex
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QHeaderView, QTableView
+from PySide6.QtWidgets import QHeaderView, QTableView, QAbstractItemView
 
 # ROS2
 import rclpy
@@ -67,7 +67,7 @@ class RefreshTimerEmitter(QObject):
     def __init__(self):
         super().__init__()
         self.signal_timer = QtCore.QTimer()
-        self.signal_timer.setInterval(100)
+        self.signal_timer.setInterval(200)
         self.signal_timer.timeout.connect(self.signal.emit)
 
     def start(self):
@@ -113,7 +113,7 @@ class gcs_mission_interface:
         # self.ros_node.add_on_env_update_listener(partial(self.stage_for_refresh, target="env"))
 
         # Signal based
-        # self.refresh_signal_emitter.signal.connect(self.__update_env_view)
+        self.refresh_signal_emitter.signal.connect(self.__update_env_view)
 
         # - Mission state listeners
         # Event based
@@ -175,6 +175,8 @@ class gcs_mission_interface:
         # # selection_model.selectionChanged.connect(partial(self.__select_task, source=self.ui.tableView_tasks_overview))
         # selection_model.selectionChanged.connect(self.__select_task)
 
+        # ----- Config TableViews
+
         # ----------------------------------- Final setup
         # -> QT timer based spin
         self.spin_timer = QtCore.QTimer()
@@ -211,12 +213,38 @@ class gcs_mission_interface:
     # ============================================================== METHODS
     # ------------------------------ Format
     def __configure_table_view(self, table_view):
-        header = table_view.horizontalHeader()
-        header.setSectionResizeMode(QHeaderView.ResizeToContents)
-        header.setStretchLastSection(True)
-        table_view.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+
+        def adjustColumnWidths(tableView):
+            """
+            Adjust column widths based on the content. Only consider the first 5 rows for performance.
+            """
+            model = tableView.model()
+            if not model:
+                return
+
+            header = tableView.horizontalHeader()
+            for column in range(model.columnCount()):
+                # Calculate width based on visible rows
+                max_width = 100  # Default width
+                for row in range(min(5, model.rowCount())):  # Limit to 5 rows for performance
+                    index = model.index(row, column)
+                    width = tableView.fontMetrics().horizontalAdvance(str(index.data()))
+                    max_width = max(max_width, width + 10)  # Add padding
+
+                header.resizeSection(column, max_width)
+
+        # TableView
+        adjustColumnWidths(table_view)
         table_view.setSelectionBehavior(QTableView.SelectRows)
         table_view.setSelectionMode(QTableView.SingleSelection)
+        # table_view.resizeColumnsToContents()
+
+        # Vertical header
+        # table_view.verticalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+
+        # Horizontal header
+        # table_view.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeToContents)
+        table_view.horizontalHeader().setStretchLastSection(True)
 
     # ------------------------------ Setup
     def __reset_local_allocation_node(self, *args, **kwargs):
@@ -243,10 +271,15 @@ class gcs_mission_interface:
         """
         Create all the widgets and subscribers for the agents
         """
+
+        start_time = time.time()
+
         # -> Check that all agents in fleet have a widget. If not, create agent widget
         for agent in self.ros_node.fleet:
             if "overview_widget" not in agent.local:
                 self.__create_agent(agent)
+
+        print(f"Agent creation time: {time.time() - start_time}")
 
     def __create_agent(self, agent: Agent, *args, **kwargs) -> None:
         """
@@ -283,10 +316,14 @@ class gcs_mission_interface:
         Create all the widgets and subscribers for the tasks
         """
 
+        start_time = time.time()
+
         # -> Check that all task in the task log have a widget. If not, create task widget
         for task in self.ros_node.tasklog:
             if "overview_widget" not in task.local:
                 self.__create_task(task)
+
+        print(f"Task creation time: {time.time() - start_time}")
 
     def __create_task(self, task: Task, *args, **kwargs) -> None:
         # -> Create overview widget
@@ -341,6 +378,8 @@ class gcs_mission_interface:
         Update the interface
         """
 
+        start_time = time.time()
+
         if self.ros_node.environment is None:
             return
 
@@ -364,10 +403,14 @@ class gcs_mission_interface:
         else:
             self.ui.env_widget.update()
 
+        print(f"Env update time: {time.time() - start_time}")
+
     def __update_mission_state_overview(self, *args, **kwargs) -> None:
         """
         Update the mission state overview widgets
         """
+
+        start_time = time.time()
 
         # ---- Fleet
         self.ui.lcdNumber_agent_count_total.display(len(self.ros_node.fleet))
@@ -394,10 +437,14 @@ class gcs_mission_interface:
 
         self.ui.progressBar_mission_progress.setValue(mission_progress)
 
+        print(f"Mission state update time: {time.time() - start_time}")
+
     def __update_agents(self, *args, **kwargs) -> None:
         """
         Update the agent overview widgets
         """
+
+        start_time = time.time()
 
         # -> Define column headers
         overview_columns = ["ID", "Name", "Class", "Rank", "Affiliations", "Specs", "Skillset", "Position", "Orientation", "Battery Level", "Stuck", "State Timestamp"]
@@ -442,6 +489,8 @@ class gcs_mission_interface:
             # -> Select first agent if no agent is selected
             self.ui.tableView_agents_select.selectRow(0)
 
+        print(f"Agent update time: {time.time() - start_time}")
+
     def __update_tasks(self, *args, **kwargs) -> None:
         """
         Update the task overview widgets
@@ -449,6 +498,7 @@ class gcs_mission_interface:
 
         start_time = time.time()
 
+        # ----- Create new models
         # -> Define column headers
         overview_columns = ["ID", "Type", "Priority", "Affiliations", "Creator", "Creation Timestamp", "Termination Timestamp", "Status", "Termination Source"]
         select_columns = ["ID", "Type", "Priority", "Status"]
@@ -464,15 +514,9 @@ class gcs_mission_interface:
             overview_model = TaskTableModel(tasklog=self.ros_node.tasklog, columns=overview_columns)
             select_model = TaskTableModel(tasklog=self.ros_node.tasklog, columns=select_columns)
 
-        print(f"Model creation time: {time.time() - start_time}")
-        time_1 = time.time()
-
         # -> Set models to table views
         self.ui.tableView_tasks_overview.setModel(overview_model)
         self.ui.tableView_tasks_select.setModel(select_model)
-
-        print(f"Model set time: {time.time() - time_1}")
-        time_2 = time.time()
 
         # -> Configure table views for better appearance
         self.__configure_table_view(self.ui.tableView_tasks_overview)
@@ -486,24 +530,57 @@ class gcs_mission_interface:
             partial(self.__select_task, source="tableView_tasks_select")
         )
 
-        print(f"Table configuration time: {time.time() - time_2}")
         time_3 = time.time()
 
-        # -> Reapply the shared selection based on the ID
-        if self.current_task_id_selection is not None:
-            row_index = overview_model.get_row_by_task_id(self.current_task_id_selection)
+        # ----- Reapply the shared selection based on the ID
+        # -> If no task is selected, select the first task
+        if self.current_task_id_selection is None:
+            self.current_task_id_selection = self.ros_node.tasklog.get_by_index(index=0).id
 
-            time_3_2 = time.time()
-            # Only select if it's not already selected
-            self.ui.tableView_tasks_overview.selectRow(row_index)
-            print(f"    Row selection time: {time.time() - time_3_2}")
+        row_index = overview_model.get_row_by_task_id(self.current_task_id_selection)
 
-            row_index = select_model.get_row_by_task_id(self.current_task_id_selection)
-            self.ui.tableView_tasks_select.selectRow(row_index)
+        time_3_2 = time.time()
 
-        else:
-            # -> Select first task if no task is selected
-            self.ui.tableView_tasks_select.setCurrentIndex(0)
+        # -> Retrieve the row index for the task ID
+        if row_index is not None:
+            # Tasks overview
+            selection_model = self.ui.tableView_tasks_overview.selectionModel()
+
+            if selection_model:
+                # -> Create a QModelIndex for the row
+                index = self.ui.tableView_tasks_overview.model().index(row_index, 0)  # Use column 0 for QModelIndex
+
+                self.ui.tableView_tasks_overview.setUpdatesEnabled(False)
+
+                # -> Select the row using the selection model
+                selection_model.select(index, QItemSelectionModel.Rows | QItemSelectionModel.ClearAndSelect)
+
+                # -> Set it as the current index
+                self.ui.tableView_tasks_overview.setCurrentIndex(index)
+
+                self.ui.tableView_tasks_overview.setUpdatesEnabled(True)
+
+            # Tasks selection
+            selection_model = self.ui.tableView_tasks_select.selectionModel()
+
+            if selection_model:
+                # -> Create a QModelIndex for the row
+                index = self.ui.tableView_tasks_select.model().index(row_index, 0)
+
+                self.ui.tableView_tasks_select.setUpdatesEnabled(False)
+
+                # S-> elect the row using the selection model
+                selection_model.select(index, QItemSelectionModel.Rows | QItemSelectionModel.ClearAndSelect)
+
+                # -> Set it as the current index
+                self.ui.tableView_tasks_select.setCurrentIndex(index)
+
+                self.ui.tableView_tasks_select.setUpdatesEnabled(True)
+
+        print(f"    Row selection time: {time.time() - time_3_2}")
+
+        row_index = select_model.get_row_by_task_id(self.current_task_id_selection)
+        self.ui.tableView_tasks_select.selectRow(row_index)
 
         print(f"Task selection time: {time.time() - time_3}")
 
@@ -761,7 +838,6 @@ class TaskTableModel(QAbstractTableModel):
         # return self.model().index(row_index, 0)  # Create a QModelIndex (use column 0 for now)
 
         return self.task_id_index_map.get(task_id, -1)
-
 
 
 def main(args=None):

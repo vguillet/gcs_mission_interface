@@ -212,8 +212,8 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>320</width>
-            <height>219</height>
+            <width>327</width>
+            <height>261</height>
            </rect>
           </property>
           <attribute name="label">
@@ -316,7 +316,7 @@
            <rect>
             <x>0</x>
             <y>0</y>
-            <width>88</width>
+            <width>98</width>
             <height>88</height>
            </rect>
           </property>
@@ -364,7 +364,7 @@
           <enum>QTabWidget::Triangular</enum>
          </property>
          <property name="currentIndex">
-          <number>4</number>
+          <number>0</number>
          </property>
          <widget class="QWidget" name="tabWidgetPage1">
           <attribute name="title">
@@ -399,7 +399,11 @@
             </layout>
            </item>
            <item>
-            <widget class="QTableWidget" name="tableWidget_task_list_x"/>
+            <widget class="QTableWidget" name="tableWidget_task_list_x">
+             <property name="selectionMode">
+              <enum>QAbstractItemView::NoSelection</enum>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>
@@ -436,7 +440,11 @@
             </layout>
            </item>
            <item>
-            <widget class="QTableWidget" name="tableWidget_local_bids_c"/>
+            <widget class="QTableWidget" name="tableWidget_local_bids_c">
+             <property name="selectionMode">
+              <enum>QAbstractItemView::NoSelection</enum>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>
@@ -473,7 +481,11 @@
             </layout>
            </item>
            <item>
-            <widget class="QTableWidget" name="tableWidget_local_allocations_d"/>
+            <widget class="QTableWidget" name="tableWidget_local_allocations_d">
+             <property name="selectionMode">
+              <enum>QAbstractItemView::NoSelection</enum>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>
@@ -510,7 +522,11 @@
             </layout>
            </item>
            <item>
-            <widget class="QTableWidget" name="tableWidget_winning_bids_y"/>
+            <widget class="QTableWidget" name="tableWidget_winning_bids_y">
+             <property name="selectionMode">
+              <enum>QAbstractItemView::NoSelection</enum>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>
@@ -547,7 +563,11 @@
             </layout>
            </item>
            <item>
-            <widget class="QTableWidget" name="tableWidget_shared_bids_b"/>
+            <widget class="QTableWidget" name="tableWidget_shared_bids_b">
+             <property name="selectionMode">
+              <enum>QAbstractItemView::NoSelection</enum>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>
@@ -584,7 +604,11 @@
             </layout>
            </item>
            <item>
-            <widget class="QTableWidget" name="tableWidget_shared_bids_priority_beta"/>
+            <widget class="QTableWidget" name="tableWidget_shared_bids_priority_beta">
+             <property name="selectionMode">
+              <enum>QAbstractItemView::NoSelection</enum>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>
@@ -621,7 +645,11 @@
             </layout>
            </item>
            <item>
-            <widget class="QTableWidget" name="tableWidget_shared_allocations_a"/>
+            <widget class="QTableWidget" name="tableWidget_shared_allocations_a">
+             <property name="selectionMode">
+              <enum>QAbstractItemView::NoSelection</enum>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>
@@ -658,7 +686,11 @@
             </layout>
            </item>
            <item>
-            <widget class="QTableWidget" name="tableWidget_shared_allocation_priority_alpha"/>
+            <widget class="QTableWidget" name="tableWidget_shared_allocation_priority_alpha">
+             <property name="selectionMode">
+              <enum>QAbstractItemView::NoSelection</enum>
+             </property>
+            </widget>
            </item>
           </layout>
          </widget>

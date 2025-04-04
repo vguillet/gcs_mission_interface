@@ -477,7 +477,7 @@ class GE_node(Serializable):
 
         return result is not None
         
-    # -------------------------------------------- Misc
+    # -------------------------------------------- Environment
     def refresh_block(self):
         self.dag_node.refresh_block()
 

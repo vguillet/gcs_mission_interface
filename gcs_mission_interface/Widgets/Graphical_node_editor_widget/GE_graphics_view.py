@@ -541,7 +541,7 @@ class GE_graphics_view(QGraphicsView):
         else:
             super().wheelEvent(event)
 
-    # - Misc
+    # - Environment
     def _set_sockets_highlight(self, scene_pos: QPointF,  state: bool, radius: int):
         """ Disable/enable socket highlight in a given radius"""
         # -> Define scan rectangle

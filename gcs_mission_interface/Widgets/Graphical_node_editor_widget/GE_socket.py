@@ -86,7 +86,7 @@ class GE_socket(Serializable):
         else:
             logger.warning(f"Trying to remove an edge ({edge}) not connected to socket {self}")
 
-    # -------------------------------------------- Misc
+    # -------------------------------------------- Environment
     def get_position(self):
         return [*self.ge_node.get_socket_position(index=self.index, position=self.position)]
 

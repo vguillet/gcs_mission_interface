@@ -16,10 +16,10 @@ from matplotlib.figure import Figure
 
 # Own modules
 try:
-    from orchestra_config.sim_config import *
+    from maaf_config.maaf_config import *
 
 except ImportError:
-    from orchestra_config.orchestra_config.sim_config import *
+    from mmaaf_config.aaf_config.maaf_config import *
 
 ##################################################################################################################
 

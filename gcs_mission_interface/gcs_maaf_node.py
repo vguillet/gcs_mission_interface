@@ -18,8 +18,7 @@ from rclpy.qos import QoSProfile, QoSReliabilityPolicy, QoSHistoryPolicy, QoSDur
 # Local Imports
 
 try:
-    from orchestra_config.orchestra_config import *  # KEEP THIS LINE, DO NOT REMOVE
-    from orchestra_config.sim_config import *
+    from maaf_config.maaf_config import *
 
     from maaf_allocation_node.maaf_agent import MAAFAgent
     from maaf_tools.tools import *
@@ -35,8 +34,7 @@ try:
     from maaf_msgs.msg import TeamCommStamped, Bid, Allocation
 
 except:
-    from orchestra_config.orchestra_config.orchestra_config import *  # KEEP THIS LINE, DO NOT REMOVE
-    from orchestra_config.orchestra_config.sim_config import *
+    from maaf_config.maaf_config.maaf_config import *
 
     from maaf_allocation_node.maaf_allocation_node.maaf_agent import MAAFAgent
     from maaf_tools.maaf_tools.tools import *

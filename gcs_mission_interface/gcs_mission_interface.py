@@ -23,8 +23,7 @@ from geometry_msgs.msg import Twist, PoseStamped, Point
 # Local Imports
 
 try:
-    from orchestra_config.orchestra_config import *  # KEEP THIS LINE, DO NOT REMOVE
-    from orchestra_config.sim_config import *
+    from maaf_config.maaf_config import *
 
     from maaf_tools.datastructures.task.Task import Task
     from maaf_tools.datastructures.task.TaskLog import TaskLog
@@ -37,8 +36,7 @@ try:
     from maaf_tools.tools import *
 
 except ImportError:
-    from orchestra_config.orchestra_config import *  # KEEP THIS LINE, DO NOT REMOVE
-    from orchestra_config.orchestra_config.sim_config import *
+    from maaf_config.maaf_config.maaf_config import *
 
     from maaf_tools.maaf_tools.datastructures.task.Task import Task
     from maaf_tools.maaf_tools.datastructures.task.TaskLog import TaskLog

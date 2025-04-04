@@ -184,7 +184,7 @@ class GE_edge(Serializable):
         self.start_socket = None
         self.end_socket = None
 
-    # -------------------------------------------- Misc
+    # -------------------------------------------- Environment
     @property
     def edge_type(self): return self._type
     @edge_type.setter

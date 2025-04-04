@@ -96,7 +96,7 @@ class GE_scene(Serializable):
         else:
             logger.warning(f"Trying to remove an edge ({edge}) not present in scene")
 
-    # -------------------------------------------- Misc
+    # -------------------------------------------- Environment
     def check_has_edge(self, start_socket, end_socket) -> bool:
         for edge in self.edges:
             if edge.start_socket == start_socket and edge.end_socket == end_socket \

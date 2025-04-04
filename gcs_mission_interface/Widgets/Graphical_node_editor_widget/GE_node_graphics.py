@@ -204,7 +204,7 @@ class GE_node_graphics(QGraphicsItem):
             self._last_selected_state = self.isSelected()
             self.onSelected()
 
-    # -------------------------------------------- Misc
+    # -------------------------------------------- Environment
     def set_edit_mode(self, state: bool) -> None:
         # -> Set node behavior
         self.setFlag(QGraphicsItem.ItemIsMovable, not state)

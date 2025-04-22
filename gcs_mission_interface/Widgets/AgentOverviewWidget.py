@@ -77,11 +77,11 @@ class AgentOverviewWidget(QWidget):
         current_interface_view[
             "tableWidget_winning_bids_y_scroll_vertical"] = self.ui.tableWidget_winning_bids_y.verticalScrollBar().value()
 
-        # > tableWidget_shared_bids_b
+        # > tableWidget_shared_bids_f
         current_interface_view[
-            "tableWidget_shared_bids_b_scroll_horizontal"] = self.ui.tableWidget_shared_bids_b.horizontalScrollBar().value()
+            "tableWidget_shared_bids_f_scroll_horizontal"] = self.ui.tableWidget_shared_bids_f.horizontalScrollBar().value()
         current_interface_view[
-            "tableWidget_shared_bids_b_scroll_vertical"] = self.ui.tableWidget_shared_bids_b.verticalScrollBar().value()
+            "tableWidget_shared_bids_f_scroll_vertical"] = self.ui.tableWidget_shared_bids_f.verticalScrollBar().value()
 
         # > tableWidget_shared_bids_priority_beta
         current_interface_view[
@@ -131,9 +131,9 @@ class AgentOverviewWidget(QWidget):
         self.ui.tableWidget_winning_bids_y.horizontalScrollBar().setValue(current_interface_view["tableWidget_winning_bids_y_scroll_horizontal"])
         self.ui.tableWidget_winning_bids_y.verticalScrollBar().setValue(current_interface_view["tableWidget_winning_bids_y_scroll_vertical"])
 
-        # > tableWidget_shared_bids_b
-        self.ui.tableWidget_shared_bids_b.horizontalScrollBar().setValue(current_interface_view["tableWidget_shared_bids_b_scroll_horizontal"])
-        self.ui.tableWidget_shared_bids_b.verticalScrollBar().setValue(current_interface_view["tableWidget_shared_bids_b_scroll_vertical"])
+        # > tableWidget_shared_bids_f
+        self.ui.tableWidget_shared_bids_f.horizontalScrollBar().setValue(current_interface_view["tableWidget_shared_bids_f_scroll_horizontal"])
+        self.ui.tableWidget_shared_bids_f.verticalScrollBar().setValue(current_interface_view["tableWidget_shared_bids_f_scroll_vertical"])
 
         # > tableWidget_shared_bids_priority_beta
         self.ui.tableWidget_shared_bids_priority_beta.horizontalScrollBar().setValue(current_interface_view["tableWidget_shared_bids_priority_beta_scroll_horizontal"])
@@ -234,11 +234,11 @@ class AgentOverviewWidget(QWidget):
                 data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["winning_bids_y"]
             )
 
-        # > tableWidget_shared_bids_b
-        if "shared_bids_b" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
+        # > tableWidget_shared_bids_f
+        if "shared_bids_f" in self.ros_node.fleet[self.agent_id].local["allocation_state"]:
             self.__set_table_widget(
-                table_widget=self.ui.tableWidget_shared_bids_b,
-                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["shared_bids_b"]
+                table_widget=self.ui.tableWidget_shared_bids_f,
+                data=self.ros_node.fleet[self.agent_id].local["allocation_state"]["shared_bids_f"]
             )
 
         # > tableWidget_shared_bids_priority_beta

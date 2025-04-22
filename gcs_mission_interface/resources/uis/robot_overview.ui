@@ -563,7 +563,7 @@
             </layout>
            </item>
            <item>
-            <widget class="QTableWidget" name="tableWidget_shared_bids_b">
+            <widget class="QTableWidget" name="tableWidget_shared_bids_f">
              <property name="selectionMode">
               <enum>QAbstractItemView::NoSelection</enum>
              </property>

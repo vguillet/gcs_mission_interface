@@ -203,7 +203,7 @@ class MAAFNode(MAAFAgent):
 
         # -> Update shared states
         self.update_shared_states(
-            received_shared_bids_b=received_allocation_state["shared_bids_b"],
+            received_shared_bids_f=received_allocation_state["shared_bids_f"],
             received_shared_bids_priority_beta=received_allocation_state["shared_bids_priority_beta"],
             received_shared_allocations_a=received_allocation_state["shared_allocations_a"],
             received_shared_allocations_priority_alpha=received_allocation_state["shared_allocations_priority_alpha"]
@@ -358,7 +358,7 @@ class MAAFNode(MAAFAgent):
 
     def update_shared_states(
             self,
-            received_shared_bids_b,
+            received_shared_bids_f,
             received_shared_bids_priority_beta,
             received_shared_allocations_a,
             received_shared_allocations_priority_alpha
@@ -366,43 +366,43 @@ class MAAFNode(MAAFAgent):
         """
         Update local states with received states from the fleet
 
-        :param received_shared_bids_b: Task bids matrix b received from the fleet
+        :param received_shared_bids_f: Task bids matrix b received from the fleet
         :param received_shared_bids_priority_beta: Task bids priority matrix beta received from the fleet
         :param received_shared_allocations_a: Task allocations matrix a received from the fleet
         :param received_shared_allocations_priority_alpha: Task allocations priority matrix alpha received from the fleet
         """
 
-        received_tasks_ids = list(received_shared_bids_b.index)
-        received_agent_ids = list(received_shared_bids_b.columns)
+        received_tasks_ids = list(received_shared_bids_f.index)
+        received_agent_ids = list(received_shared_bids_f.columns)
 
         # -> For each task ...
         for task_id in received_tasks_ids:
-            if task_id not in self.shared_bids_b.index:
+            if task_id not in self.shared_bids_f.index:
                 continue
 
             # -> for each agent ...
             for agent_id in received_agent_ids:
-                if agent_id not in self.shared_bids_b.columns:
+                if agent_id not in self.shared_bids_f.columns:
                     continue
 
                 # -> Priority merge with reset received current bids b into local current bids b
                 # > Determine correct matrix values
-                shared_bids_b_ij_updated, shared_bids_priority_beta_ij_updated = (
+                shared_bids_f_ij_updated, shared_bids_priority_beta_ij_updated = (
                     self.CBAA_priority_merge(
                         # Logging
                         task_id=task_id,
                         agent_id=agent_id,
 
                         # Merging
-                        matrix_updated_ij=self.shared_bids_b.loc[task_id, agent_id],
-                        matrix_source_ij=received_shared_bids_b.loc[task_id, agent_id],
+                        matrix_updated_ij=self.shared_bids_f.loc[task_id, agent_id],
+                        matrix_source_ij=received_shared_bids_f.loc[task_id, agent_id],
                         priority_updated_ij=self.shared_bids_priority_beta.loc[task_id, agent_id],
                         priority_source_ij=received_shared_bids_priority_beta.loc[task_id, agent_id]
                     )
                 )
 
                 # > Update local states
-                self.shared_bids_b.loc[task_id, agent_id] = shared_bids_b_ij_updated
+                self.shared_bids_f.loc[task_id, agent_id] = shared_bids_f_ij_updated
                 self.shared_bids_priority_beta.loc[task_id, agent_id] = shared_bids_priority_beta_ij_updated
 
                 # -> Priority merge received current allocations a into local current allocations a
@@ -486,7 +486,7 @@ class MAAFNode(MAAFAgent):
 
             print("\n------------")
             print("Current bids b:")
-            print(self.shared_bids_b)
+            print(self.shared_bids_f)
 
             # print("\nCurrent bids priority beta:")
             # print(self.shared_bids_priority_beta)

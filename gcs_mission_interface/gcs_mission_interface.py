@@ -35,7 +35,7 @@ from geometry_msgs.msg import Twist, PoseStamped, Point
 
 try:
     from maaf_config.maaf_config import *
-    from maaf_core.MAAFNode import MAAFNode
+    from maaf_core.MAAFInterfaceNode import MAAFInterfaceNode
 
     from maaf_tools.datastructures.task.Task import Task
     from maaf_tools.datastructures.task.TaskLog import TaskLog
@@ -56,7 +56,7 @@ try:
 
 except ImportError:
     from maaf_config.maaf_config.maaf_config import *
-    from maaf_core.maaf_core.MAAFNode import MAAFNode
+    from maaf_core.maaf_core.MAAFInterfaceNode import MAAFInterfaceNode
 
     from maaf_tools.maaf_tools.datastructures.task.Task import Task
     from maaf_tools.maaf_tools.datastructures.task.TaskLog import TaskLog
@@ -105,7 +105,7 @@ class gcs_mission_interface:
 
         # ----------------------------------- Create Node
         # ---- Init parent class
-        self.ros_node = MAAFNode()
+        self.ros_node = MAAFInterfaceNode()
 
         # -> Extend the ui singleton
         self.selected_agent_id = None

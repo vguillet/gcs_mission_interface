@@ -152,7 +152,6 @@ class AgentOverviewWidget(QWidget):
 
     def __update_header(self):
         # -> Update agent details
-        self.ui.label_agent_name.setText(self.ros_node.fleet[self.agent_id].name)
         self.ui.label_agent_id.setText(str(self.ros_node.fleet[self.agent_id].id))
         self.ui.label_agent_class.setText(self.ros_node.fleet[self.agent_id].agent_class)
 
@@ -196,10 +195,6 @@ class AgentOverviewWidget(QWidget):
         else:
             # > Set radio button color
             self.ui.radioButton_comms_link_state.setStyleSheet("color: red;")
-
-        # > Rank
-        # self.ui.comboBox_agent_rank   TODO: Fix once adjustable ranks are implemented
-        self.ui.label_current_rank.setText(str(self.ros_node.fleet[self.agent_id].hierarchy_level))
 
         # -> Allocation state
         if "allocation_state" not in self.ros_node.fleet[self.agent_id].local.keys():

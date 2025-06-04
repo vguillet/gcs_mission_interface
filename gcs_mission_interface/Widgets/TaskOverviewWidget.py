@@ -47,6 +47,7 @@ class TaskOverviewWidget(QWidget):
         self.ui.label_task_type.setText(str(self.task.type))
 
         # > Metadata
+        print(">>>>>>>>>>>>>>>>>>>", self.task.creator)
         self.ui.label_task_creator.setText(self.task.creator)
 
         creation_timestamp = to_datetime(self.task.creation_timestamp, unit="s")
@@ -83,5 +84,3 @@ class TaskOverviewWidget(QWidget):
             self.ui.label_task_status.setStyleSheet("color: green")
         elif self.task.status == "cancelled":
             self.ui.label_task_status.setStyleSheet("color: red")
-
-

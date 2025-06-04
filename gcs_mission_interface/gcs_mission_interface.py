@@ -16,6 +16,17 @@ from PySide6.QtCore import Signal, QObject, QAbstractTableModel, Qt, QItemSelect
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QHeaderView, QTableView, QAbstractItemView
 
+from PySide6.QtCore import Qt, QStringListModel, QModelIndex, QItemSelectionModel
+from PySide6.QtWidgets import (
+    QWidget, QVBoxLayout, QInputDialog, QMessageBox,
+    QFileDialog, QDialog, QLabel, QSizePolicy, QAbstractItemView
+)
+
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.figure import Figure
+
+
 # ROS2
 import rclpy
 from geometry_msgs.msg import Twist, PoseStamped, Point
@@ -24,6 +35,7 @@ from geometry_msgs.msg import Twist, PoseStamped, Point
 
 try:
     from maaf_config.maaf_config import *
+    from maaf_core.MAAFNode import MAAFNode
 
     from maaf_tools.datastructures.task.Task import Task
     from maaf_tools.datastructures.task.TaskLog import TaskLog
@@ -35,8 +47,16 @@ try:
 
     from maaf_tools.tools import *
 
+    from gcs_mission_interface.ui_singleton import UiSingleton
+
+    from gcs_mission_interface.Widgets.AgentOverviewWidget import AgentOverviewWidget
+    from gcs_mission_interface.Widgets.TaskOverviewWidget import TaskOverviewWidget
+    from gcs_mission_interface.Widgets.BaseTaskWidget import BaseTaskWidget
+    from gcs_mission_interface.Widgets.GraphEnvView import GraphEnvView
+
 except ImportError:
     from maaf_config.maaf_config.maaf_config import *
+    from maaf_core.maaf_core.MAAFNode import MAAFNode
 
     from maaf_tools.maaf_tools.datastructures.task.Task import Task
     from maaf_tools.maaf_tools.datastructures.task.TaskLog import TaskLog
@@ -48,13 +68,12 @@ except ImportError:
 
     from maaf_tools.maaf_tools.tools import *
 
-from .gcs_maaf_node import MAAFNode
-from .ui_singleton import UiSingleton
+    from gcs_mission_interface.gcs_mission_interface.ui_singleton import UiSingleton
 
-from .Widgets.AgentOverviewWidget import AgentOverviewWidget
-from .Widgets.TaskOverviewWidget import TaskOverviewWidget
-from .Widgets.BaseTaskWidget import BaseTaskWidget
-from .Widgets.GraphEnvView import GraphEnvView
+    from gcs_mission_interface.gcs_mission_interface.Widgets.AgentOverviewWidget import AgentOverviewWidget
+    from gcs_mission_interface.gcs_mission_interface.Widgets.TaskOverviewWidget import TaskOverviewWidget
+    from gcs_mission_interface.gcs_mission_interface.Widgets.BaseTaskWidget import BaseTaskWidget
+    from gcs_mission_interface.gcs_mission_interface.Widgets.GraphEnvView import GraphEnvView
 
 ##################################################################################################################
 
@@ -148,9 +167,14 @@ class gcs_mission_interface:
         # ----- Connect other signals
         self.ui.pushButton_reset_local_allocation_node.clicked.connect(self.__reset_local_allocation_node)
         self.ui.pushButton_task_overview_view_switcher.clicked.connect(self.__switch_task_overview_view_mode)
+        self.ui.pushButton_plot_allocation.clicked.connect(self.onPlotAllocation)
 
         # Toggle switch once to set the initial view and button text
         self.__switch_task_overview_view_mode()
+
+        # Modeless plot window placeholders
+        self.plot_window = None
+        self.plot_label = None
 
         # # -> Agent selection
         # self.ui.tableView_agents_select.itemSelectionChanged.connect(
@@ -175,6 +199,8 @@ class gcs_mission_interface:
 
         # ----- Config TableViews
 
+        self.refreshUI(target="*")
+
         # ----------------------------------- Final setup
         # -> QT timer based spin
         self.spin_timer = QtCore.QTimer()
@@ -190,7 +216,16 @@ class gcs_mission_interface:
         sys.exit(app.exec())
 
     # ============================================================== REFRESH EVENT LOGIC HANDLER
-    def refreshUI(self, target):
+    def refreshUI(self, target: str):
+        if target == "*":
+            self.__update_env_view()
+            self.__create_agents()
+            self.__update_agents()
+            self.__create_tasks()
+            self.__update_tasks()
+
+            self.refresh_flags[target] = False
+
         if self.refresh_flags[target] is True:
             if target == "env":
                 self.__update_env_view()
@@ -435,7 +470,7 @@ class gcs_mission_interface:
 
         self.ui.progressBar_mission_progress.setValue(mission_progress)
 
-        print(f"Mission state update time: {time.time() - start_time}")
+        #print(f"Mission state update time: {time.time() - start_time}")
 
     def __update_agents(self, *args, **kwargs) -> None:
         """
@@ -445,8 +480,8 @@ class gcs_mission_interface:
         start_time = time.time()
 
         # -> Define column headers
-        overview_columns = ["ID", "Name", "Class", "Rank", "Affiliations", "Specs", "Skillset", "Position", "Orientation", "Battery Level", "Stuck", "State Timestamp"]
-        select_columns = ["ID", "Name", "Class"]
+        overview_columns = ["ID", "Class", "Specs", "Skillset", "Position", "Orientation", "Battery Level", "Stuck", "State Timestamp"]
+        select_columns = ["ID", "Class"]
 
         # -> Check if fleet is empty
         if not self.ros_node.fleet:
@@ -532,7 +567,7 @@ class gcs_mission_interface:
 
         # ----- Reapply the shared selection based on the ID
         # -> If no task is selected, select the first task
-        if self.current_task_id_selection is None:
+        if self.current_task_id_selection is None and self.ros_node.tasklog:
             self.current_task_id_selection = self.ros_node.tasklog.get_by_index(index=0).id
 
         row_index = overview_model.get_row_by_task_id(self.current_task_id_selection)
@@ -649,6 +684,70 @@ class gcs_mission_interface:
             # -> Switch stacked widget to the task overview
             self.ui.stackedWidget_tasks_overviews.setCurrentWidget(widget)
 
+    # ------------------------------ Plot
+    def onPlotAllocation(self):
+        """
+        Opens or updates a modeless window showing the plan graph with interactive matplotlib tools.
+        """
+        if self.plot_window is None:
+            self.plot_window = QDialog()
+            self.plot_window.setWindowTitle("Agent Mappings")
+            self.plot_window.setModal(False)
+            self.plot_window.setMinimumSize(400, 300)
+
+            # Set layout
+            layout = QVBoxLayout(self.plot_window)
+
+            # Create and store the Figure and Canvas
+            self.plot_figure = Figure()
+            self.plot_canvas = FigureCanvas(self.plot_figure)
+            self.plot_canvas.setFocusPolicy(Qt.ClickFocus)
+            self.plot_canvas.setFocus()
+
+            # Add navigation toolbar
+            self.plot_toolbar = NavigationToolbar(self.plot_canvas, self.plot_window)
+            layout.addWidget(self.plot_toolbar)
+            layout.addWidget(self.plot_canvas)
+
+        self.update_plot_window()
+
+        if self.plot_window.isMinimized():
+            self.plot_window.showNormal()
+
+        self.plot_window.show()
+        self.plot_window.raise_()
+        self.plot_window.activateWindow()
+
+    def update_plot_window(self):
+        if self.plot_window is None or not hasattr(self, "plot_figure"):
+            return
+
+        try:
+            # Reuse existing axes if available
+            if not self.plot_figure.axes:
+                ax = self.plot_figure.add_subplot(111)
+            else:
+                ax = self.plot_figure.axes[0]
+
+            ax.clear()
+
+            # Redraw the plot on the existing axes
+            self.ros_node.organisation.plot_goal_allocation(
+                display_plot=False,
+                ax=ax,
+                # winning_agents_k=self.ros_node.winning_agents_k,
+                tasklog=self.ros_node.tasklog
+            )
+
+            self.plot_figure.tight_layout()
+
+            if hasattr(self, "plot_canvas"):
+                self.plot_canvas.draw()
+
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Failed to plot agent mappings:\n{e}")
+
+
     # ================================================= Custom ROS2 integration
     def pose_subscriber_callback(self, pose_msg, agent) -> None:
         """
@@ -718,14 +817,8 @@ class AgentTableModel(QAbstractTableModel):
         # Map column names to agent attributes or derived values
         if column == "ID":
             return agent.id
-        elif column == "Name":
-            return agent.name
         elif column == "Class":
             return agent.agent_class
-        elif column == "Rank":
-            return agent.hierarchy_level
-        elif column == "Affiliations":
-            return ", ".join(agent.affiliations) if agent.affiliations else "N/A"
         elif column == "Specs":
             return ", ".join(agent.specs) if agent.specs else "N/A"
         elif column == "Skillset":

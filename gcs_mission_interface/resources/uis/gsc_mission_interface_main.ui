@@ -225,8 +225,8 @@
                 <rect>
                  <x>0</x>
                  <y>0</y>
-                 <width>506</width>
-                 <height>275</height>
+                 <width>98</width>
+                 <height>28</height>
                 </rect>
                </property>
                <layout class="QVBoxLayout" name="verticalLayout_4">
@@ -273,9 +273,16 @@
            </spacer>
           </item>
           <item>
+           <widget class="QPushButton" name="pushButton_plot_allocation">
+            <property name="text">
+             <string>Plot</string>
+            </property>
+           </widget>
+          </item>
+          <item>
            <widget class="QPushButton" name="pushButton_task_overview_view_switcher">
             <property name="text">
-             <string>PushButton</string>
+             <string>Switch View</string>
             </property>
            </widget>
           </item>
@@ -289,28 +296,29 @@
        </attribute>
        <layout class="QVBoxLayout" name="verticalLayout_8">
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_6">
-          <item>
-           <widget class="QListWidget" name="tasklog"/>
-          </item>
-          <item>
-           <widget class="QTabWidget" name="tabWidget">
-            <property name="tabPosition">
-             <enum>QTabWidget::East</enum>
-            </property>
-            <widget class="QWidget" name="tab">
-             <attribute name="title">
-              <string>Tab 1</string>
-             </attribute>
-            </widget>
-            <widget class="QWidget" name="tab_2">
-             <attribute name="title">
-              <string>Tab 2</string>
-             </attribute>
-            </widget>
-           </widget>
-          </item>
-         </layout>
+         <widget class="QTabWidget" name="tabWidget">
+          <property name="tabPosition">
+           <enum>QTabWidget::East</enum>
+          </property>
+          <property name="currentIndex">
+           <number>1</number>
+          </property>
+          <widget class="QWidget" name="tab">
+           <attribute name="title">
+            <string>Tab 1</string>
+           </attribute>
+           <layout class="QVBoxLayout" name="verticalLayout_12">
+            <item>
+             <widget class="QListWidget" name="tasklog"/>
+            </item>
+           </layout>
+          </widget>
+          <widget class="QWidget" name="tab_2">
+           <attribute name="title">
+            <string>Tab 2</string>
+           </attribute>
+          </widget>
+         </widget>
         </item>
        </layout>
       </widget>
